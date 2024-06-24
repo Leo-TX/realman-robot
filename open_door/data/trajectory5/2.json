@@ -1,0 +1,18 @@
+{
+    "last_id": 1,
+    "last_ret": -1,
+    "last_param": [
+        1.0,
+        0,
+        0
+    ],
+    "last_error": "PREMOVE_TOO_CLOSE",
+    "this_id": 1,
+    "this_ret": -1,
+    "this_param": [
+        0.2,
+        0,
+        0
+    ],
+    "this_error": "PREMOVE_TOO_CLOSE"
+}
