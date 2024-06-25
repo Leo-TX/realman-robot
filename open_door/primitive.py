@@ -15,8 +15,9 @@ import shutil
 import json
 import clip
 import torch
-from PIL import Image
 import threading
+from collections import namedtuple
+from PIL import Image
 from matplotlib import pyplot as plt
 
 from arm import Arm
@@ -31,15 +32,23 @@ from dmp import DMP
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 ## for safty
-GRASP_CURRENT_THRESHOLD = 10000
-UNLOCK_CURRENT_THRESHOLD = 15000
-ROTATE_CURRENT_THRESHOLD = 15000
-OPEN_CURRENT_THRESHOLD = 25000
+GRASP_CURRENT_THRESHOLD_L = -10000
+GRASP_CURRENT_THRESHOLD_H = 10000
+UNLOCK_CURRENT_THRESHOLD_L = -15000
+UNLOCK_CURRENT_THRESHOLD_H = 15000
+ROTATE_CURRENT_THRESHOLD_L = -15000
+ROTATE_CURRENT_THRESHOLD_H = 15000
+OPEN_CURRENT_THRESHOLD_L = -15000
+OPEN_CURRENT_THRESHOLD_H = 25000 # TODO
+
+PULL_DOOR_THRESHOLD_JOINT_4_L = -8000
+PUSH_DOOR_THRESHOLD_JOINT_4_H = 15000 # TODO
 
 ## Primitive Types
 # DUAL = 0 # [0/1,0,0] # 0 for right 1 for left
 START = 1024
 FINISH = 2048
+HOME = 0 # [0,0,0]
 PREMOVE = 1 # [T,0,0]
 GRASP = 2 # [dx,dy,dz]
 UNLOCK = 3 # [T,0,0]
@@ -52,23 +61,23 @@ SUCCESS = 1
 SAFTY_ISSUE = 2131
 NO_SAFTY_ISSUE = 3121
 
-PREMOVE_TOO_CLOSE = -1 # CLIP: "There is/isn't a handle."
+PREMOVE_TOO_CLOSE = -1
 
-GRASP_IK_FAIL = -1 # IK Error(can't reach)
-GRASP_MISS = -1 # CLIP: "The gripper is/isn't grasping the handle."
-GRASP_SAFTY = 0 # Current Detection
+GRASP_IK_FAIL = -1
+GRASP_MISS = -1
+GRASP_SAFTY = 0
 
-ROTATE_MISS = -1 # CLIP: "The gripper is/isn't grasping the handle./The gripper API?"
-ROTATE_SAFTY = 0 # Current Detection(rotating too much)
+ROTATE_MISS = -1
+ROTATE_SAFTY = 0
 ROTATE_IK_FAIL = -1
 
-UNLOCK_MISS = -1 # CLIP: "The gripper is/isn't grasping the handle./The gripper API?"
-UNLOCK_SAFTY = 0 # Current Detection(unlocking too much)
+UNLOCK_MISS = -1
+UNLOCK_SAFTY = 0
 UNLOCK_IK_FAIL = -1
 
-OPEN_MISS = -1 # CLIP
-OPEN_SAFTY = -1 # should be pull(but push)
-OPEN_FAIL = -1 # should be push(but pull) The location of the base doesn't change too much
+OPEN_MISS = -1
+OPEN_SAFTY = -1
+OPEN_FAIL = -1
 
 def time_it(func):
     def wrapper(*args, **kwargs):
@@ -80,9 +89,22 @@ def time_it(func):
         return result
     return wrapper
 
+class _Primitive:
+    def __init__(self, action="START", id=START, ret=1, param=[0,0,0], error="None"):
+        self.action = action
+        self.id = id
+        self.ret = ret
+        self.param = param
+        self.error = error
+    
+    def to_list(self):
+        return [self.action, self.id, self.ret, self.param, self.error]
+    
+    def __str__(self):
+        return ''
+
 class Primitive(object):
     def __init__(self,root_dir='./',tjt_num=1):
-        self.primitives = []
         self.root_dir = root_dir
 
         # trajectory
@@ -99,24 +121,20 @@ class Primitive(object):
         
         self.action_num = 0
 
-        self.this_id = 0
-        self.this_ret = 0
-        self.this_param = [0,0,0]
-        self.this_error = ''
+        self.last_pmt = _Primitive(action="START",id=START,ret=1,param=[0,0,0],error="NONE")
+        self.this_pmt = _Primitive()
 
-        self.last_id = START
-        self.last_ret = 1
-        self.last_param = [0,0,0]
-        self.last_error = 'START'
+        self.primitives = {0:self.last_pmt.to_list()}
         
         self.clip_model, self.preprocess = None, None
         
         self.grasp_thresholds = [[-GRASP_CURRENT_THRESHOLD, GRASP_CURRENT_THRESHOLD] for _ in range(6)]
         self.unlock_thresholds = [[-UNLOCK_CURRENT_THRESHOLD, UNLOCK_CURRENT_THRESHOLD] for _ in range(6)]
         self.rotate_thresholds = [[-ROTATE_CURRENT_THRESHOLD, ROTATE_CURRENT_THRESHOLD] for _ in range(6)]
-        self.open_thresholds = [[-OPEN_CURRENT_THRESHOLD, OPEN_CURRENT_THRESHOLD] for _ in range(6)]
+        self.open_thresholds = [[OPEN_CURRENT_THRESHOLD_L, OPEN_CURRENT_THRESHOLD_H] for _ in range(6)]
         
-        self.current_max = 0
+        self.current_max = [0]*7
+        self.current_min = [0]*7
 
         self.connect_robot()
     
@@ -166,6 +184,8 @@ class Primitive(object):
             return ROTATE
         elif action == "open":
             return OPEN
+        elif action == "home":
+            return HOME
         elif action == "finish":
             return FINISH
         else:
@@ -174,24 +194,34 @@ class Primitive(object):
     def update(self,save_path=None):
         if save_path is None:
             save_path=f'{self.tjt_dir}/{self.action_num}.json'
-        data = {"last_id": self.last_id,
-                "last_ret": self.last_ret,
-                "last_param": self.last_param,
-                "last_error": self.last_error,
-                "this_id": self.this_id,
-                "this_ret": self.this_ret,
-                "this_param": self.this_param,
-                "this_error": self.this_error
+        
+        data = {"last_action": self.last_pmt.action,
+                "last_id": self.last_pmt.id,
+                "last_ret": self.last_pmt.ret,
+                "last_param": self.last_pmt.param,
+                "last_error": self.last_pmt.error,
+                "this_action": self.this_pmt.action,
+                "this_id": self.this_pmt.id,
+                "this_ret": self.this_pmt.ret,
+                "this_param": self.this_pmt.param,
+                "this_error": self.this_pmt.error
                 }
+        
         with open(save_path,'w') as json_file:
             json.dump(data,json_file,indent=4)
-        self.last_id = self.this_id
-        self.last_ret = self.this_ret
-        self.last_param = self.this_param
-        self.last_error = self.this_error
+        
+        # self.this_pmt --> self.last_pmt
+        for attr in ["action", "id", "ret", "param", "error"]:
+            setattr(self.last_pmt, attr, getattr(self.this_pmt, attr))
 
-        self.primitives.append([self.this_id,self.this_ret,self.this_param,self.this_error])
-
+        self.primitives[self.action_num] = self.this_pmt.to_list()
+    
+    def save_primitives(self,save_path=None):
+        if save_path is None:
+            save_path=f'{self.tjt_dir}/primitives.json'
+        
+        with open(save_path,'w') as json_file:
+            json.dump(self.primitives,json_file,indent=4)
 
     def CLIP(self,rgb_img, text_prompt, model_name = "ViT-B/32", if_p = False):
         if self.clip_model is None or self.preprocess is None:
@@ -256,20 +286,21 @@ class Primitive(object):
             current_check_result = self.check_current_safety(thresholds)
             if current_check_result == 0:
                 print(f"!!!SAFTY ISSUE!!!")
-                self.this_ret = SAFTY_ISSUE
-                self.this_error = 'SAFTY_ISSUE'
+                self.this_pmt.ret = SAFTY_ISSUE
+                self.this_pmt.error = 'SAFTY_ISSUE'
                 self.arm.move_stop(if_p=True)
                 break
             else:
-                self.this_ret = NO_SAFTY_ISSUE
-                self.this_error = 'NO_SAFTY_ISSUE'
+                self.this_pmt.ret = NO_SAFTY_ISSUE
+                self.this_pmt.error = 'NO_SAFTY_ISSUE'
             time.sleep(0.1)
 
     def check_current_safety(self, thresholds):
         current = self.arm.get_c()
-        self.current_max = max(max(abs(x) for x in current),self.current_max)
         for i in range(7):
             self.current_data[i].append(current[i])
+            self.current_max[i] = max(self.current_max[i],self.current_data[i])
+            self.current_min[i] = min(self.current_min[i],self.current_data[i])
         for i, (min_current, max_current) in enumerate(thresholds):
             if current[i] < min_current or current[i] > max_current:
                 return 0
@@ -295,28 +326,32 @@ class Primitive(object):
     @time_it
     def premove(self,premove_T):
         print(f'========== Premoving ... ==========')
-        self.this_id = PREMOVE
-        self.this_param = [premove_T,0,0]
+        self.this_pmt.action = "PREMOVE"
+        self.this_pmt.id = PREMOVE
+        self.this_pmt.param = [premove_T,0,0]
 
         self.base.move_T(T=premove_T)
         time.sleep(2)
+
         if self.CLIP_detection(rgb_img=Image.fromarray(self.camera.capture_rgb()), text_prompt=['there is a handle','there is not a handle'],if_p=True) == 1:
-            self.this_ret = PREMOVE_TOO_CLOSE
-            self.this_error = "PREMOVE_TOO_CLOSE"
+            self.this_pmt.ret = PREMOVE_TOO_CLOSE
+            self.this_pmt.error = "PREMOVE_TOO_CLOSE"
         else:
-            self.this_ret = SUCCESS
-            self.this_error = "NONE"
+            self.this_pmt.ret = SUCCESS
+            self.this_pmt.error = "NONE"
 
         self.update()
-        print(f'[Primitive INFO] ret: {self.this_ret}, error: {self.this_error}')
+        print(f'[Primitive INFO] ret: {self.this_pmt.ret}, error: {self.this_pmt.error}')
         print(f'========== Premove Done ==========')
-        return self.this_ret,self.this_error
+        return self.this_pmt.ret,self.this_pmt.error
     
     @time_it
     def grasp(self,grasp_offset=[-0.04,0.03,0.01],thresholds=None):
         print('========== Grasping... ==========')
-        self.this_id = GRASP
-        self.this_param = grasp_offset
+        self.this_pmt.action = "GRASP"
+        self.this_pmt.id = GRASP
+        self.this_pmt.param = grasp_offset
+
         if thresholds is None:
             thresholds = self.grasp_thresholds
         self.start_current_monitor_thread(thresholds=thresholds)
@@ -395,31 +430,33 @@ class Primitive(object):
         self.current_monitor_thread.join()
         self.vis_current_data()
 
-        if self.this_ret == NO_SAFTY_ISSUE:
+        if self.this_pmt.ret == NO_SAFTY_ISSUE:
             if tag1 !=0 or tag2 != 0:
-                self.this_ret = GRASP_IK_FAIL
-                self.this_error = "GRASP_IK_FAIL"
+                self.this_pmt.ret = GRASP_IK_FAIL
+                self.this_pmt.error = "GRASP_IK_FAIL"
             ## grasp success if clip detecting grasping or gripper detecting grasping
             elif not(self.CLIP_detection(rgb_img=Image.fromarray(self.capture(if_d=False,vis=False,if_update=False)), text_prompt=['manipulated handle','untouched handle'],if_p=True) == 0 or self.arm.get_gripper_grasp_return(if_p=True) == 2):
-                self.this_ret = GRASP_MISS
-                self.this_error = "GRASP_MISS"
+                self.this_pmt.ret = GRASP_MISS
+                self.this_pmt.error = "GRASP_MISS"
             else:
-                self.this_ret = SUCCESS
-                self.this_error = "NONE"
-        elif self.this_ret == SAFTY_ISSUE:
-            self.this_ret = GRASP_SAFTY
-            self.this_error = "GRASP_SAFTY"
+                self.this_pmt.ret = SUCCESS
+                self.this_pmt.error = "NONE"
+        elif self.this_pmt.ret == SAFTY_ISSUE:
+            self.this_pmt.ret = GRASP_SAFTY
+            self.this_pmt.error = "GRASP_SAFTY"
         
         self.update()
-        print(f'[Primitive INFO] ret: {self.this_ret}, error: {self.this_error}')
+        print(f'[Primitive INFO] ret: {self.this_pmt.ret}, error: {self.this_pmt.error}')
         print(f'========== Grasp Done ==========')
-        return self.this_ret,self.this_error
+        return self.this_pmt.ret,self.this_pmt.error
     
     @time_it
     def rotate(self,rotate_T=1.5,thresholds=None):
         print(f'========== Rotating ... ==========')
-        self.this_id = ROTATE
-        self.this_param = [rotate_T,0,0]
+        self.this_pmt.action = "ROTATE"
+        self.this_pmt.id = ROTATE
+        self.this_pmt.param = [rotate_T,0,0]
+
         if thresholds is None:
             thresholds = self.rotate_thresholds
         self.start_current_monitor_thread(thresholds=thresholds)
@@ -439,30 +476,32 @@ class Primitive(object):
         self.current_monitor_thread.join()
         self.vis_current_data()
 
-        if self.this_ret == NO_SAFTY_ISSUE:
+        if self.this_pmt.ret == NO_SAFTY_ISSUE:
             if tag != 0:
-                self.this_ret = ROTATE_IK_FAIL
-                self.this_error = "ROTATE_IK_FAIL"
+                self.this_pmt.ret = ROTATE_IK_FAIL
+                self.this_pmt.error = "ROTATE_IK_FAIL"
             elif not(self.CLIP_detection(rgb_img=Image.fromarray(self.capture(if_d=False,vis=False,if_update=False)), text_prompt=['manipulated handle','untouched handle'],if_p=True) == 0 or self.arm.get_gripper_grasp_return(if_p=True) == 2):
-                self.this_ret = ROTATE_MISS
-                self.this_error = "ROTATE_MISS"
+                self.this_pmt.ret = ROTATE_MISS
+                self.this_pmt.error = "ROTATE_MISS"
             else:
-                self.this_ret = SUCCESS
-                self.this_error = "NONE"
-        elif self.this_ret == SAFTY_ISSUE:
-            self.this_ret = ROTATE_SAFTY
-            self.this_error = "ROTATE_SAFTY"
+                self.this_pmt.ret = SUCCESS
+                self.this_pmt.error = "NONE"
+        elif self.this_pmt.ret == SAFTY_ISSUE:
+            self.this_pmt.ret = ROTATE_SAFTY
+            self.this_pmt.error = "ROTATE_SAFTY"
 
         self.update()
-        print(f'[Primitive INFO] ret: {self.this_ret}, error: {self.this_error}')
+        print(f'[Primitive INFO] ret: {self.this_pmt.ret}, error: {self.this_pmt.error}')
         print(f'========== Rotate Done ==========')
-        return self.this_ret,self.this_error
+        return self.this_pmt.ret,self.this_pmt.error
 
     @time_it
     def unlock(self,unlock_T=1.5,thresholds=None):
         print(f'========== Unlocking ... ==========')
-        self.this_id = UNLOCK
-        self.this_param = [unlock_T,0,0]
+        self.this_pmt.action = "UNLOCK"
+        self.this_pmt.id = UNLOCK
+        self.this_pmt.param = [unlock_T,0,0]
+
         if thresholds is None:
             thresholds = self.unlock_thresholds
         self.start_current_monitor_thread(thresholds=thresholds)
@@ -481,39 +520,40 @@ class Primitive(object):
         print(f'Closing Gripper ...')
         if not(tag1 != 0  or tag2 != 0):
             self.arm.control_gripper(open_value=50)
-            time.sleep(2)
+            time.sleep(3)
         
-        time.sleep(2)
         ## SAFTY detection
         self.monitor_running = False
         self.current_monitor_thread.join()
         self.vis_current_data()
-
-        if self.this_ret == NO_SAFTY_ISSUE:
+        
+        if self.this_pmt.ret == NO_SAFTY_ISSUE:
             if tag1 != 0  or tag2 != 0:
-                self.this_ret = UNLOCK_IK_FAIL
-                self.this_error = "UNLOCK_IK_FAIL"
+                self.this_pmt.ret = UNLOCK_IK_FAIL
+                self.this_pmt.error = "UNLOCK_IK_FAIL"
             elif not(self.CLIP_detection(rgb_img=Image.fromarray(self.capture(if_d=False,vis=False,if_update=False)), text_prompt=['manipulated handle','untouched handle'],if_p=True) == 0 or self.arm.get_gripper_grasp_return(if_p=True) == 2):
-                self.this_ret = UNLOCK_MISS
-                self.this_error = "UNLOCK_MISS"
+                self.this_pmt.ret = UNLOCK_MISS
+                self.this_pmt.error = "UNLOCK_MISS"
             else:
-                self.this_ret = SUCCESS
-                self.this_error = "NONE"
-        elif self.this_ret == SAFTY_ISSUE:
-            self.this_ret = UNLOCK_SAFTY
-            self.this_error = "UNLOCK_SAFTY"
+                self.this_pmt.ret = SUCCESS
+                self.this_pmt.error = "NONE"
+        elif self.this_pmt.ret == SAFTY_ISSUE:
+            self.this_pmt.ret = UNLOCK_SAFTY
+            self.this_pmt.error = "UNLOCK_SAFTY"
 
         self.update()
-        print(f'[Primitive INFO] ret: {self.this_ret}, error: {self.this_error}')
+        print(f'[Primitive INFO] ret: {self.this_pmt.ret}, error: {self.this_pmt.error}')
         print(f'========== Unlock Done ==========')
-        return self.this_ret,self.this_error
+        return self.this_pmt.ret,self.this_pmt.error
 
     
     @time_it
     def open(self,open_T=2.0,thresholds=None):
         print(f'========== Opening ... ==========')
-        self.this_id = OPEN
-        self.this_param = [open_T,0,0]
+        self.this_pmt.action = "OPEN"
+        self.this_pmt.id = OPEN
+        self.this_pmt.param = [open_T,0,0]
+
         if thresholds is None:
             thresholds = self.open_thresholds
         self.start_current_monitor_thread(thresholds=thresholds)
@@ -536,30 +576,54 @@ class Primitive(object):
         self.current_monitor_thread.join()
         self.vis_current_data()
         
-        if self.this_ret == NO_SAFTY_ISSUE:
-            # TODO
-            # use the joint4 max current to detect
-            if distance < 0.5:
-                self.this_ret = OPEN_FAIL
-                self.this_error = "OPEN_FAIL"
+        if self.this_pmt.ret == NO_SAFTY_ISSUE:
+            if self.current_min[4-1] < PULL_DOOR_THRESHOLD_JOINT_4_L or self.current_max[4-1] > PUSH_DOOR_THRESHOLD_JOOINT_4_H:
+            # if distance < 0.5:
+                self.this_pmt.ret = OPEN_FAIL
+                self.this_pmt.error = "OPEN_FAIL"
             elif not(self.CLIP_detection(rgb_img=Image.fromarray(self.capture(if_d=False,vis=False,if_update=False)), text_prompt=['manipulated handle','untouched handle'],if_p=True) == 0 or self.arm.get_gripper_grasp_return(if_p=True) == 2):
-                self.this_ret = OPEN_MISS
-                self.this_error = "OPEN_MISS"
+                self.this_pmt.ret = OPEN_MISS
+                self.this_pmt.error = "OPEN_MISS"
             else:
-                self.this_ret = SUCCESS
-                self.this_error = "NONE"
-        elif self.this_ret == SAFTY_ISSUE:
-            self.this_ret = OPEN_SAFTY
-            self.this_error = "OPEN_SAFTY"
+                self.this_pmt.ret = SUCCESS
+                self.this_pmt.error = "NONE"
+        elif self.this_pmt.ret == SAFTY_ISSUE:
+            self.this_pmt.ret = OPEN_SAFTY
+            self.this_pmt.error = "OPEN_SAFTY"
 
         self.update()
-        print(f'[Primitive INFO] ret: {self.this_ret}, error: {self.this_error}')
+        print(f'[Primitive INFO] ret: {self.this_pmt.ret}, error: {self.this_pmt.error}')
         print(f'========== Open Done ==========')
-        return self.this_ret,self.this_error
+        return self.this_pmt.ret,self.this_pmt.error
+
+    @time_it
+    def home(self):
+        ## just for debug
+        print(f'========== Going Home ... ==========')
+
+        self.arm.control_gripper(open_value=1000)
+        time.sleep(2)
+        self.base.move_T(-0.5)
+        time.sleep(1)
+        self.arm.go_home()
+        self.base.move_location([self.start_x,self.start_y,self.start_theta])
+        self.base.move_T(0.5)
+        
+        self.this_pmt.action = "HOME"
+        self.this_pmt.id = HOME
+        self.this_pmt.ret = 1
+        self.this_pmt.param = [0,0,0]
+        self.this_pmt.error = "None"
+
+        self.update()
+        
+        print(f'[Primitive INFO] ret: {self.this_pmt.ret}, error: {self.this_pmt.error}')
+        print(f'========== Finish Done... ==========')
+        return self.this_pmt.ret,self.this_pmt.error
 
     @time_it
     def finish(self):
-        #### just for debug
+        ## just for debug
         print(f'========== Finishing ... ==========')
 
         self.arm.control_gripper(open_value=1000)
@@ -570,14 +634,18 @@ class Primitive(object):
         self.base.move_location([self.start_x,self.start_y,self.start_theta])
         self.base.move_T(0.5)
         
-        self.this_id = FINISH
-        self.this_ret = 1
-        self.this_param = [0,0,0]
-        self.this_error = "FINISH"
+        self.this_pmt.action = "FINISH"
+        self.this_pmt.id = FINISH
+        self.this_pmt.ret = 1
+        self.this_pmt.param = [0,0,0]
+        self.this_pmt.error = "None"
+
         self.update()
-        print(f'[Primitive INFO] ret: {self.this_ret}, error: {self.this_error}')
+        self.save_primitives()
+        
+        print(f'[Primitive INFO] ret: {self.this_pmt.ret}, error: {self.this_pmt.error}')
         print(f'========== Finish Done... ==========')
-        return self.this_ret,self.this_error
+        return self.this_pmt.ret,self.this_pmt.error
     
     def do_primitive(self,_id,_param):
         primitive_type = self.action2num(_id)
@@ -597,6 +665,8 @@ class Primitive(object):
             ret,error = self.unlock(unlock_T=_param[0])
         elif primitive_type == OPEN:
             ret,error = self.open(open_T=_param[0])
+        elif primitive_type == HOME:
+            ret,error = self.open()
         elif primitive_type == FINISH:
             ret,error = self.finish()
         
