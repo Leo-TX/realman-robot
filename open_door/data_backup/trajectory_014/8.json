@@ -1,0 +1,18 @@
+{
+    "last_id": 5,
+    "last_ret": -1,
+    "last_param": [
+        1.0,
+        0,
+        0
+    ],
+    "last_error": "OPEN_SAFTY",
+    "this_id": 5,
+    "this_ret": -1,
+    "this_param": [
+        0.5,
+        0,
+        0
+    ],
+    "this_error": "OPEN_SAFTY"
+}

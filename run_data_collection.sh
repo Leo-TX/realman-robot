@@ -1,0 +1,1 @@
+python ./open_door/data_collection.py -n 6

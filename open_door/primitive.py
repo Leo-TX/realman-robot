@@ -30,9 +30,16 @@ from dmp import DMP
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+## for safty
+GRASP_CURRENT_THRESHOLD = 10000
+UNLOCK_CURRENT_THRESHOLD = 15000
+ROTATE_CURRENT_THRESHOLD = 15000
+OPEN_CURRENT_THRESHOLD = 25000
+
 ## Primitive Types
 # DUAL = 0 # [0/1,0,0] # 0 for right 1 for left
-FINISH = 10086
+START = 1024
+FINISH = 2048
 PREMOVE = 1 # [T,0,0]
 GRASP = 2 # [dx,dy,dz]
 UNLOCK = 3 # [T,0,0]
@@ -60,8 +67,8 @@ UNLOCK_SAFTY = 0 # Current Detection(unlocking too much)
 UNLOCK_IK_FAIL = -1
 
 OPEN_MISS = -1 # CLIP
-OPEN_SAFTY = -1
-OPEN_FAIL = -1 # The location of the base doesn't change too much
+OPEN_SAFTY = -1 # should be pull(but push)
+OPEN_FAIL = -1 # should be push(but pull) The location of the base doesn't change too much
 
 def time_it(func):
     def wrapper(*args, **kwargs):
@@ -80,7 +87,7 @@ class Primitive(object):
 
         # trajectory
         self.tjt_num = tjt_num
-        self.tjt_dir = f'{self.root_dir}/data/trajectory{self.tjt_num}/'
+        self.tjt_dir = f'{self.root_dir}/data/trajectory_{self.tjt_num:03d}/'
         if os.path.exists(self.tjt_dir):
              shutil.rmtree(self.tjt_dir)
         os.makedirs(self.tjt_dir)
@@ -91,22 +98,26 @@ class Primitive(object):
         self.cam2base_H_path = f'{self.cfg_dir}/cam2base_H.csv'
         
         self.action_num = 0
+
         self.this_id = 0
         self.this_ret = 0
         self.this_param = [0,0,0]
         self.this_error = ''
-        self.last_id = 0
-        self.last_ret = 0
+
+        self.last_id = START
+        self.last_ret = 1
         self.last_param = [0,0,0]
-        self.last_error = ''
+        self.last_error = 'START'
         
         self.clip_model, self.preprocess = None, None
-
-        self.grasp_thresholds = [[-100000, 100000],[-100000, 100000],[-100000, 100000],[-100000, 100000],[-100000, 100000],[-100000, 100000],[-100000, 100000]]
-        self.unlock_thresholds = [[-100000, 100000],[-100000, 100000],[-100000, 100000],[-100000, 100000],[-100000, 100000],[-100000, 100000],[-100000, 100000]] # 10000
-        self.rotate_thresholds = [[-100000, 100000],[-100000, 100000],[-100000, 100000],[-100000, 100000],[-100000, 100000],[-100000, 100000],[-100000, 100000]]
-        self.open_thresholds = [[-100000, 100000],[-100000, 100000],[-100000, 100000],[-100000, 100000],[-100000, 100000],[-100000, 100000],[-100000, 100000]]
         
+        self.grasp_thresholds = [[-GRASP_CURRENT_THRESHOLD, GRASP_CURRENT_THRESHOLD] for _ in range(6)]
+        self.unlock_thresholds = [[-UNLOCK_CURRENT_THRESHOLD, UNLOCK_CURRENT_THRESHOLD] for _ in range(6)]
+        self.rotate_thresholds = [[-ROTATE_CURRENT_THRESHOLD, ROTATE_CURRENT_THRESHOLD] for _ in range(6)]
+        self.open_thresholds = [[-OPEN_CURRENT_THRESHOLD, OPEN_CURRENT_THRESHOLD] for _ in range(6)]
+        
+        self.current_max = 0
+
         self.connect_robot()
     
     def connect_robot(self):
@@ -201,7 +212,7 @@ class Primitive(object):
 
     def CLIP_detection(self,rgb_img=None,text_prompt=["door that is closed", "door that is open"],if_p=False):
         if rgb_img is None:
-            rgb_img = Image.fromarray(self.camera.capture_rgb())
+            rgb_img = Image.fromarray(self.capture(if_d=False,vis=False,if_update=False))
         probs = self.CLIP(rgb_img, text_prompt) # using CLIP
         result = 1 if probs[0][1] > probs[0][0] else 0 # Reward is 1 if closer to 'open door' prompt, 0 otherwise
         if if_p:
@@ -210,22 +221,27 @@ class Primitive(object):
         return result
 
     # @time_it
-    def capture(self,if_d=False,vis=False):
+    def capture(self,if_d=False,vis=False,if_update=True):
         # print('========== Image Capturing ... ==========')
-        self.action_num += 1
-        self.rgb_img_path = f'{self.tjt_dir}/{self.action_num}.png'
+        if if_update:
+            self.action_num += 1
+            self.rgb_img_path = f'{self.tjt_dir}/{self.action_num}.png'
         if if_d:
             self.d_img_path = f'{self.tjt_dir}/{self.action_num}/d.png'
             if not os.path.exists(os.path.dirname(self.d_img_path)):
                 os.makedirs(os.path.dirname(self.d_img_path))
-            self.camera.capture_rgbd(rgb_save_path=self.rgb_img_path,d_save_path=self.d_img_path)
+            rgb_img,d_img = self.camera.capture_rgbd(rgb_save_path=self.rgb_img_path,d_save_path=self.d_img_path)
             if vis:
                 self.camera.vis_rgbd(d_img_path=self.d_img_path,rgb_img_path=self.rgb_img_path,save_path=f'{self.tjt_dir}/{self.action_num}/rgbd_vis.png')
                 self.camera.vis_d(d_img_path=self.d_img_path,save_path=f'{self.tjt_dir}/{self.action_num}/d_vis.png')
+            return rgb_img,d_img 
         else:
-            self.camera.capture_rgb(rgb_save_path=self.rgb_img_path)
+            if if_update:
+                rgb_img = self.camera.capture_rgb(rgb_save_path=self.rgb_img_path)
+            else:
+                rgb_img = self.camera.capture_rgb(f'{self.tjt_dir}/temp.png')
+            return rgb_img
         # print(f'========== Image Captured ==========')
-        return 1
 
     def start_current_monitor_thread(self, thresholds):
         self.current_data = {i: [] for i in range(7)}
@@ -251,6 +267,7 @@ class Primitive(object):
 
     def check_current_safety(self, thresholds):
         current = self.arm.get_c()
+        self.current_max = max(max(abs(x) for x in current),self.current_max)
         for i in range(7):
             self.current_data[i].append(current[i])
         for i, (min_current, max_current) in enumerate(thresholds):
@@ -283,7 +300,7 @@ class Primitive(object):
 
         self.base.move_T(T=premove_T)
         time.sleep(2)
-        if self.CLIP_detection(rgb_img=Image.fromarray(self.camera.capture_rgb()), text_prompt=['door with a handle','door without a handle'],if_p=True) == 1:
+        if self.CLIP_detection(rgb_img=Image.fromarray(self.camera.capture_rgb()), text_prompt=['there is a handle','there is not a handle'],if_p=True) == 1:
             self.this_ret = PREMOVE_TOO_CLOSE
             self.this_error = "PREMOVE_TOO_CLOSE"
         else:
@@ -296,7 +313,7 @@ class Primitive(object):
         return self.this_ret,self.this_error
     
     @time_it
-    def grasp(self,grasp_offset=[-0.04,0.03,0],thresholds=None):
+    def grasp(self,grasp_offset=[-0.04,0.03,0.01],thresholds=None):
         print('========== Grasping... ==========')
         self.this_id = GRASP
         self.this_param = grasp_offset
@@ -364,9 +381,15 @@ class Primitive(object):
         
         ## move to handle
         print(f'Moving ...')
-        tag1 = self.arm.move_p(pos=middle_pose,vel=10,if_p=True)
-        tag2 = self.arm.move_p(pos=goal_pos,vel=10,if_p=True)
-        
+        tag1 = self.arm.move_p(pos=middle_pose,vel=20,if_p=True)
+        tag2 = self.arm.move_p(pos=goal_pos,vel=20,if_p=True)
+
+        ## close gripper
+        print(f'Closing Gripper ...')
+        if not(tag1 != 0  or tag2 != 0):
+            self.arm.control_gripper(open_value=50)
+            time.sleep(1)
+
         ## SAFTY detection
         self.monitor_running = False
         self.current_monitor_thread.join()
@@ -376,8 +399,8 @@ class Primitive(object):
             if tag1 !=0 or tag2 != 0:
                 self.this_ret = GRASP_IK_FAIL
                 self.this_error = "GRASP_IK_FAIL"
-            elif self.CLIP_detection(rgb_img=Image.fromarray(self.camera.capture_rgb()), text_prompt=['gripper on the handle','gripper not on the handle'],if_p=True) == 1:
-                # if self.arm.
+            ## grasp success if clip detecting grasping or gripper detecting grasping
+            elif not(self.CLIP_detection(rgb_img=Image.fromarray(self.capture(if_d=False,vis=False,if_update=False)), text_prompt=['manipulated handle','untouched handle'],if_p=True) == 0 or self.arm.get_gripper_grasp_return(if_p=True) == 2):
                 self.this_ret = GRASP_MISS
                 self.this_error = "GRASP_MISS"
             else:
@@ -391,7 +414,6 @@ class Primitive(object):
         print(f'[Primitive INFO] ret: {self.this_ret}, error: {self.this_error}')
         print(f'========== Grasp Done ==========')
         return self.this_ret,self.this_error
-
     
     @time_it
     def rotate(self,rotate_T=1.5,thresholds=None):
@@ -404,8 +426,8 @@ class Primitive(object):
 
         ## close gripper
         print(f'Closing Gripper ...')
-        self.arm.control_gripper(open_value=280)
-        time.sleep(1)
+        self.arm.control_gripper(open_value=50)
+        time.sleep(2)
 
         ## rotate
         print(f'Rotating ...')
@@ -421,7 +443,7 @@ class Primitive(object):
             if tag != 0:
                 self.this_ret = ROTATE_IK_FAIL
                 self.this_error = "ROTATE_IK_FAIL"
-            elif self.CLIP_detection(rgb_img=Image.fromarray(self.camera.capture_rgb()), text_prompt=['handle with gripper grasping','handle without gripper grasping'],if_p=True) == 1:
+            elif not(self.CLIP_detection(rgb_img=Image.fromarray(self.capture(if_d=False,vis=False,if_update=False)), text_prompt=['manipulated handle','untouched handle'],if_p=True) == 0 or self.arm.get_gripper_grasp_return(if_p=True) == 2):
                 self.this_ret = ROTATE_MISS
                 self.this_error = "ROTATE_MISS"
             else:
@@ -447,7 +469,7 @@ class Primitive(object):
 
         ## close gripper
         print(f'Closing Gripper ...')
-        self.arm.control_gripper(open_value=280)
+        self.arm.control_gripper(open_value=300)
         time.sleep(2)
 
         ## unlock
@@ -457,9 +479,11 @@ class Primitive(object):
 
         ## close gripper
         print(f'Closing Gripper ...')
-        self.arm.control_gripper(open_value=150)
-        time.sleep(3)
+        if not(tag1 != 0  or tag2 != 0):
+            self.arm.control_gripper(open_value=50)
+            time.sleep(2)
         
+        time.sleep(2)
         ## SAFTY detection
         self.monitor_running = False
         self.current_monitor_thread.join()
@@ -469,7 +493,7 @@ class Primitive(object):
             if tag1 != 0  or tag2 != 0:
                 self.this_ret = UNLOCK_IK_FAIL
                 self.this_error = "UNLOCK_IK_FAIL"
-            elif self.CLIP_detection(rgb_img=Image.fromarray(self.camera.capture_rgb()), text_prompt=['handle with gripper grasping','handle without gripper grasping'],if_p=True) == 1:
+            elif not(self.CLIP_detection(rgb_img=Image.fromarray(self.capture(if_d=False,vis=False,if_update=False)), text_prompt=['manipulated handle','untouched handle'],if_p=True) == 0 or self.arm.get_gripper_grasp_return(if_p=True) == 2):
                 self.this_ret = UNLOCK_MISS
                 self.this_error = "UNLOCK_MISS"
             else:
@@ -495,15 +519,17 @@ class Primitive(object):
         self.start_current_monitor_thread(thresholds=thresholds)
 
         print(f'Close Gripper ...')
-        self.arm.control_gripper(open_value=150)
+        self.arm.control_gripper(open_value=50)
         time.sleep(1.5)
         print(f'opening ...')
         start_location = self.base.get_location()
-        print(f'start_location:{start_location}')
+        # print(f'start_location:{start_location}')
         self.base.move_T(T=open_T)
         time.sleep(abs(open_T)+1)
         end_location = self.base.get_location()
-        print(f'end_location:{end_location}')
+        # print(f'end_location:{end_location}')
+        distance = np.sqrt((start_location[0]-end_location[0])**2+(start_location[1]-end_location[1])**2)
+        print(f'[Base Info]: Distance: {distance}')
 
         ## SAFTY detection
         self.monitor_running = False
@@ -511,11 +537,12 @@ class Primitive(object):
         self.vis_current_data()
         
         if self.this_ret == NO_SAFTY_ISSUE:
-
-            if np.sqrt((start_location[0]-end_location[0])**2+(start_location[1]-end_location[1])**2) < 0.2:
+            # TODO
+            # use the joint4 max current to detect
+            if distance < 0.5:
                 self.this_ret = OPEN_FAIL
                 self.this_error = "OPEN_FAIL"
-            elif self.CLIP_detection(rgb_img=Image.fromarray(self.camera.capture_rgb()), text_prompt=['handle with gripper grasping','handle without gripper grasping'],if_p=True) == 1:
+            elif not(self.CLIP_detection(rgb_img=Image.fromarray(self.capture(if_d=False,vis=False,if_update=False)), text_prompt=['manipulated handle','untouched handle'],if_p=True) == 0 or self.arm.get_gripper_grasp_return(if_p=True) == 2):
                 self.this_ret = OPEN_MISS
                 self.this_error = "OPEN_MISS"
             else:
@@ -532,40 +559,67 @@ class Primitive(object):
 
     @time_it
     def finish(self):
+        #### just for debug
         print(f'========== Finishing ... ==========')
+
         self.arm.control_gripper(open_value=1000)
-        time.sleep(1)
+        time.sleep(2)
         self.base.move_T(-0.5)
         time.sleep(1)
         self.arm.go_home()
         self.base.move_location([self.start_x,self.start_y,self.start_theta])
-        # do not update(just for debug)
-        self.this_ret = FINISH
+        self.base.move_T(0.5)
+        
+        self.this_id = FINISH
+        self.this_ret = 1
+        self.this_param = [0,0,0]
         self.this_error = "FINISH"
+        self.update()
         print(f'[Primitive INFO] ret: {self.this_ret}, error: {self.this_error}')
         print(f'========== Finish Done... ==========')
         return self.this_ret,self.this_error
     
     def do_primitive(self,_id,_param):
         primitive_type = self.action2num(_id)
+        ## capture
+        if primitive_type == GRASP:
+            self.capture(if_d=True,vis=True,if_update=True)
+        else:
+            self.capture(if_d=False,vis=False,if_update=True)
+        ## do action
         if primitive_type == PREMOVE:
-            self.capture()
             ret,error = self.premove(premove_T=_param[0])
         elif primitive_type == GRASP:
-            self.capture(if_d=True,vis=True)
             ret,error = self.grasp(grasp_offset=_param[:3])
         elif primitive_type == ROTATE:
-            self.capture()
             ret,error = self.rotate(rotate_T=_param[0])
         elif primitive_type == UNLOCK:
-            self.capture()
             ret,error = self.unlock(unlock_T=_param[0])
         elif primitive_type == OPEN:
-            self.capture()
             ret,error = self.open(open_T=_param[0])
         elif primitive_type == FINISH:
             ret,error = self.finish()
+        
+        self.capture(if_d=False,vis=False,if_update=False)
+        
         return ret,error
+
+    def data_collection(self):
+        num = 0
+        while True:
+            num += 1
+            print('***************************************************************')
+            user_input = input(f"[Please Input Primitive_{num}]: ")
+            if user_input.lower() == 'q':
+                break
+            try:
+                action_id, *param = [x.strip() for x in user_input.split(',')]
+                param = [float(x) for x in param]
+                ret, error = self.do_primitive(action_id, param)
+            except Exception as e:
+                print(f"ERROR TYPE: {type(e)}: {e}")
+                print("Please re-input!")
+            print('***************************************************************\n\n')
 
 if __name__ == '__main__':
     primitive = Primitive(root_dir='./',tjt_num=2)

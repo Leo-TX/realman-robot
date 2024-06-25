@@ -20,10 +20,23 @@ import threading
 from utils.math import *
 from arm_package.robotic_arm import Arm as ArmBase
 
-VZ_SPEED = 0.02 # 2cm/s
+VZ_SPEED = 0.025 # 2.5cm/s
 VZ_SPEED_DEGREE = 14 # 14°/s
 VYAW_SPEED_DEGREE = 35 # 35°/s
 VYAW_SPEED_RADIAN = 25*np.pi/180
+
+## for dh_gripper:
+ADDRESS_INIT_GRIPPER = int(0x0100)
+ADDRESS_SET_FORCE = int(0x0101)
+ADDRESS_SET_POS = int(0X0103)
+ADDRESS_SET_VEL = int(0X0104)
+ADDRESS_GET_GRIPPER_INIT_RETURN = int(0x0200)
+ADDRESS_GET_GRIPPER_GRASP_RETURN = int(0x0201)
+ADDRESS_GET_GRIPPER_POS = int(0x0202)
+GRIPPER_VOLTAGE = 3
+GRIPPER_PORT = 1
+GRIPPER_BAUDRATE = 115200
+GRIPPER_DEVICE = 1
 
 class ArmInfoMonitor:
     def __init__(self, arm, refresh_freq=1, title='', gif_folder='./images/image1/current_monitor'):
@@ -141,7 +154,6 @@ class Arm():
         self.change_tool_frame(self.tool_frame)
         print('Arm Connected\n==========')
 
-
     def disconnect(self):
         self.arm.Arm_Socket_Close()
     
@@ -150,41 +162,34 @@ class Arm():
 
     def start_current_monitor(self):
         self.current_monitor.detect_info_realtime()
+
+    def connect_gripper(self,force=30,start_pos=1000,vel=50):
+        print('==========\nGripper Connecting...')
+        tag = self.arm.Set_Tool_Voltage(type=GRIPPER_VOLTAGE,block=True)
+        tag = self.arm.Set_Modbus_Mode(port=GRIPPER_PORT, baudrate=GRIPPER_BAUDRATE, timeout=2, block=True)
+        tag = self.arm.Write_Single_Register(port=GRIPPER_PORT, address=ADDRESS_INIT_GRIPPER, data=1, device=GRIPPER_DEVICE, block=True)
+        tag = self.arm.Write_Single_Register(port=GRIPPER_PORT, address=ADDRESS_SET_FORCE, data=force, device=GRIPPER_DEVICE, block=True)
+        tag = self.arm.Write_Single_Register(port=GRIPPER_PORT, address=ADDRESS_SET_POS, data=start_pos, device=GRIPPER_DEVICE, block=True)
+        tag = self.arm.Write_Single_Register(port=GRIPPER_PORT, address=ADDRESS_SET_VEL, data=vel, device=GRIPPER_DEVICE, block=True)
+        tag, value = self.arm.Get_Read_Input_Registers(port=GRIPPER_PORT, address=ADDRESS_GET_GRIPPER_INIT_RETURN, device=GRIPPER_DEVICE)
+        if value != 1: # 0: not init. 1: init is successful. 2: initializing
+            print(f'[Arm Info] Init Failed: {value}!!!!!!! Re-init Gripper...')
+            self.connect_gripper()
+        print('Gripper Connected\n==========')
+        return tag
+
+    def control_gripper(self,open_value):
+        tag = self.arm.Write_Single_Register(port=GRIPPER_PORT, address=ADDRESS_SET_POS, data=open_value, device=GRIPPER_DEVICE, block=True)
+        return tag
     
-
-    def connect_gripper(self,force=30,start_pos=1000,vel=30,tool_voltage=3,port=1,baudrate=115200,device=1):
-        ADDRESS_INIT_GRIPPER = int(0x0100)
-        ADDRESS_SET_FORCE = int(0x0101)
-        ADDRESS_SET_POS = int(0X0103)
-        ADDRESS_SET_VEL = int(0X0104)
-        ADDRESS_GET_GRIPPER_INIT_RETURN = int(0x0200)
-        ADDRESS_GET_GRIPPER_GRASP_RETURN = int(0x0201)
-        ADDRESS_GET_GRIPPER_POS = int(0x0202)
-
-        print(f'ADDRESS_INIT_GRIPPER:{ADDRESS_INIT_GRIPPER}')
-        tag = self.arm.Set_Tool_Voltage(type=tool_voltage,block=True)
-        tag = self.arm.Set_Modbus_Mode(port=port, baudrate=baudrate, timeout=2, block=True)
-        tag = self.arm.Write_Single_Register(port=port, address=ADDRESS_INIT_GRIPPER, data=1, device=device, block=True)
-        tag = self.arm.Write_Single_Register(port=port, address=ADDRESS_SET_FORCE, data=force, device=device, block=True)
-        tag = self.arm.Write_Single_Register(port=port, address=ADDRESS_SET_POS, data=start_pos, device=device, block=True)
-        tag = self.arm.Write_Single_Register(port=port, address=ADDRESS_SET_VEL, data=vel, device=device, block=True)
-        tag, value = self.arm.Get_Read_Input_Registers(port=port, address=ADDRESS_GET_GRIPPER_INIT_RETURN, device=device)
-        if tag != 1: #0: not init. 1: init is successful. 2: initializing
-            print(f'init failed: {value}\n')
-        return tag
-
-    def control_gripper(self,open_value,port=1,device=1):
-        ADDRESS_SET_POS = int(0X0103)
-        tag = self.arm.Write_Single_Register(port=port, address=ADDRESS_SET_POS, data=open_value, device=device, block=True)
-        return tag
-    def get_gripper_grasp_return(self,port=1,device=1):
-        ADDRESS_GET_GRIPPER_GRASP_RETURN = int(0x0201)
-        tag, value = self.arm.Get_Read_Input_Registers(port=port, address=ADDRESS_GET_GRIPPER_GRASP_RETURN, device=device)
+    def get_gripper_grasp_return(self,if_p=False):
+        tag, value = self.arm.Get_Read_Input_Registers(port=GRIPPER_PORT, address=ADDRESS_GET_GRIPPER_GRASP_RETURN, device=GRIPPER_DEVICE)
+        print(f'[Gripper INFO] Grasping Detection Result: {value}')
         return value # 0 for moving; 1 for detecting no objects grasping; 2 for detecting objects grasping; 3 for detecting objecting dropped after detecting grasping
 
-    def get_gripper_pos(self,port=1,device=1):
-        ADDRESS_GET_GRIPPER_POS = int(0x0202)
-        tag, value = self.arm.Get_Read_Input_Registers(port=port, address=ADDRESS_GET_GRIPPER_POS, device=device)
+    def get_gripper_pos(self,if_p=False):
+        tag, value = self.arm.Get_Read_Input_Registers(port=GRIPPER_PORT, address=ADDRESS_GET_GRIPPER_POS, device=GRIPPER_DEVICE)
+        print(f'[Gripper INFO] Gripper Pos: {value}')
         return value # 0-1000
 
     def go_home(self):
@@ -457,9 +462,9 @@ if __name__ =="__main__":
     ## connect
     arm = Arm('192.168.10.19',8080,cam2base_H_path='cfg/cam2base_H.csv',if_gripper=True,if_monitor=False,tool_frame='dh3')# 18 for left 19 for right
     print(arm)
-    arm.go_home()
+    # arm.go_home()
     # arm.get_c(if_p=True)
-    # arm.control_gripper(open_value=1000)
+    arm.control_gripper(open_value=1000)
     # arm.get_p(if_p=True)
     # arm.move_p(pos=[0.6051296976350004, -0.35271136656822955, -0.1534878647732853, -1.536159878101188, -1.0257231725488505, -1.9371845128439396],vel=10)
     # arm.unlock_handle_move_j(T=1.8, execute_v=5)
