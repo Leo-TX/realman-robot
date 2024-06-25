@@ -192,7 +192,7 @@ if __name__ == "__main__":
     ## init
     host_ip = '192.168.10.10'
     host_port = 31001
-    linear_velocity = 0.2
+    linear_velocity = 0.3
     angular_velocity = 0.2 #　0.2 for slow 1.0 for fast
     base = Base(host_ip,host_port,linear_velocity,angular_velocity)
 

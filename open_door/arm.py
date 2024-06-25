@@ -183,13 +183,16 @@ class Arm():
         return tag
     
     def get_gripper_grasp_return(self,if_p=False):
+        grasping_return = {0:"Gripper Moving",1:"No Objects Grasping",2:"Objects Grasping",3:"Objects Dropped After Grasping"}
         tag, value = self.arm.Get_Read_Input_Registers(port=GRIPPER_PORT, address=ADDRESS_GET_GRIPPER_GRASP_RETURN, device=GRIPPER_DEVICE)
-        print(f'[Gripper INFO] Grasping Detection Result: {value}')
+        if if_p:
+            print(f'[Gripper INFO] Grasping Detection Result: {value}  INFO: {grasping_return[value]}')
         return value # 0 for moving; 1 for detecting no objects grasping; 2 for detecting objects grasping; 3 for detecting objecting dropped after detecting grasping
 
     def get_gripper_pos(self,if_p=False):
         tag, value = self.arm.Get_Read_Input_Registers(port=GRIPPER_PORT, address=ADDRESS_GET_GRIPPER_POS, device=GRIPPER_DEVICE)
-        print(f'[Gripper INFO] Gripper Pos: {value}')
+        if if_p:
+            print(f'[Gripper INFO] Gripper Pos: {value}')
         return value # 0-1000
 
     def go_home(self):

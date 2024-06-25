@@ -284,26 +284,37 @@ def detic_sam(image_path,classes='handle',device='cuda:0',threshold=0.3):
 
     # detect
     boxes, class_idx = Detic(image, metadata, detic_predictor)
-    assert len(boxes) > 0, "Zero detections."
-    masks = SAM(image, boxes, class_idx, metadata, sam_predictor)
+    # assert len(boxes) > 0, "Zero detections."
 
-    # Save detections as a png. Save only segmentation without bounding box as a separate image.
-    classes = [metadata.thing_classes[idx] for idx in class_idx]
-    bbox_image_save_path = image_dir+'/bbox.png'
-    segm_image_save_path = image_dir+'/segm.png'
-    mask_image_save_path = image_dir+'/mask.png'
-    center_image_save_path = image_dir+'/center.png'
     result_save_path = image_dir+'/dtsam_result.json'
-    visualize_output(image, masks, boxes, classes, bbox_image_save_path)
-    visualize_output(image, masks, boxes, classes, segm_image_save_path, mask_only=True)
-    Cx, Cy = process_masks(masks,mask_image_save_path,center_image_save_path)
-    orientation = 'horizontal'
-    box = [float(value) for value in boxes[0].tolist()]
-    w, h = box[2] - box[0], box[3] - box[1]
-    orientation = 'horizontal' if w >= h else 'vertical'
-    print(f'Cx: {Cx}, Cy: {Cy}')
-    print(f'w: {w}, h: {h} orientation: {orientation}')
-    print(f'box:{box}')
+
+    if len(boxes) == 0:
+        print(f'Zero detections.')
+        w = 0
+        h = 0
+        Cx = 0
+        Cy = 0
+        orientation = ''
+        box = [0,0,0,0]
+    else:
+        masks = SAM(image, boxes, class_idx, metadata, sam_predictor)
+
+        # Save detections as a png. Save only segmentation without bounding box as a separate image.
+        classes = [metadata.thing_classes[idx] for idx in class_idx]
+        bbox_image_save_path = image_dir+'/bbox.png'
+        segm_image_save_path = image_dir+'/segm.png'
+        mask_image_save_path = image_dir+'/mask.png'
+        center_image_save_path = image_dir+'/center.png'
+        visualize_output(image, masks, boxes, classes, bbox_image_save_path)
+        visualize_output(image, masks, boxes, classes, segm_image_save_path, mask_only=True)
+        Cx, Cy = process_masks(masks,mask_image_save_path,center_image_save_path)
+        orientation = 'horizontal'
+        box = [float(value) for value in boxes[0].tolist()]
+        w, h = box[2] - box[0], box[3] - box[1]
+        orientation = 'horizontal' if w >= h else 'vertical'
+        print(f'Cx: {Cx}, Cy: {Cy}')
+        print(f'w: {w}, h: {h} orientation: {orientation}')
+        print(f'box:{box}')
     
     result = {"w":w,
               "h":h,
