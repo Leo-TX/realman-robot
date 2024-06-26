@@ -1,4 +1,5 @@
 {
+    "last_action": "PREMOVE",
     "last_id": 1,
     "last_ret": 1,
     "last_param": [
@@ -7,6 +8,7 @@
         0
     ],
     "last_error": "NONE",
+    "this_action": "GRASP",
     "this_id": 2,
     "this_ret": 1,
     "this_param": [

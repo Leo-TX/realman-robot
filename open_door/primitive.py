@@ -33,18 +33,18 @@ DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 ## for safty
 GRASP_CURRENT_THRESHOLD_L = -10000
-GRASP_CURRENT_THRESHOLD_H = 10000
+GRASP_CURRENT_THRESHOLD_H = 15000
 
-UNLOCK_CURRENT_THRESHOLD_L = -15000
-UNLOCK_CURRENT_THRESHOLD_H = 15000
+UNLOCK_CURRENT_THRESHOLD_L = -18000
+UNLOCK_CURRENT_THRESHOLD_H = 18000
 
-ROTATE_CURRENT_THRESHOLD_L = -15000
-ROTATE_CURRENT_THRESHOLD_H = 15000
+ROTATE_CURRENT_THRESHOLD_L = -18000
+ROTATE_CURRENT_THRESHOLD_H = 18000
 
 OPEN_CURRENT_THRESHOLD_L = -25000
 OPEN_CURRENT_THRESHOLD_H = 25000
 
-PULL_DOOR_THRESHOLD_JOINT_4_L = -8000
+PULL_DOOR_THRESHOLD_JOINT_4_L = -10000
 PUSH_DOOR_THRESHOLD_JOINT_4_H = 15000
 
 ## Primitive Types
@@ -52,6 +52,7 @@ PUSH_DOOR_THRESHOLD_JOINT_4_H = 15000
 START = 1024
 FINISH = 2048
 BACK = 4096
+CLEAR = 9192
 
 HOME = 0 # [0,0,0]
 PREMOVE = 1 # [T,0,0]
@@ -196,6 +197,8 @@ class Primitive(object):
             return FINISH
         elif action == "back":
             return BACK
+        elif action == "clear":
+            return CLEAR
         else:
             return -1
 
@@ -384,7 +387,7 @@ class Primitive(object):
 
         ## dtsam
         print('DTSAM ...')
-        self.dtsam = DTSAM(img_path=rgb_img_path,classes='handle',device=device,threshold=0.1)
+        self.dtsam = DTSAM(img_path=rgb_img_path,classes='handle',device=device,threshold=0.3)
         x1_2d,y1_2d,orientation,w,h = self.dtsam.get_xy_paramiko(self.server,remote_python_path,remote_root_dir,remote_img_dir)
         if w == 0 and h == 0:
             self.this_pmt.ret = GRASP_NO_HANDLE
@@ -427,13 +430,18 @@ class Primitive(object):
             print(f'DMP ...')
             self.dmp = DMP(refer_tjt_path)
             new_tjt = self.dmp.gen_new_tjt(initial_pos=self.arm.get_p(),goal_pos=self.goal_pos,show=False)
-            self.middle_pose = self.dmp.get_middle_pose(tjt=new_tjt,num=90)
-            print(f'[DMP Result] self.middle_pose: {self.middle_pose}')
+            # self.middle_pose = self.dmp.get_middle_pose(tjt=new_tjt,num=100)
+            # print(f'[DMP Result] self.middle_pose: {self.middle_pose}')
             
             ## move to handle
             print(f'Moving ...')
-            tag1 = self.arm.move_p(pos=self.middle_pose,vel=20,if_p=True)
-            tag2 = self.arm.move_p(pos=self.goal_pos,vel=20,if_p=True)
+            for num in range(90,100):
+                self.middle_pose = self.dmp.get_middle_pose(tjt=new_tjt,num=num)
+                tag1 = self.arm.move_p(pos=self.middle_pose,vel=20,if_p=True)
+                if tag1 == 0:
+                    break
+            if tag1 == 0:
+                tag2 = self.arm.move_p(pos=self.goal_pos,vel=20,if_p=True)
 
             ## close gripper
             print(f'Closing Gripper ...')
@@ -600,7 +608,7 @@ class Primitive(object):
             # if distance < 0.5:
                 self.this_pmt.ret = OPEN_FAIL
                 self.this_pmt.error = "OPEN_FAIL"
-                print(f'curent_min_joint_4: {self.current_min[4-1]} curent_max_joint_4: {self.current_amx[4-1]}')
+                print(f'curent_min_joint_4: {self.current_min[4-1]} curent_max_joint_4: {self.current_max[4-1]}')
             elif self.arm.get_gripper_grasp_return(if_p=True) != 2:
             # elif not(self.CLIP_detection(rgb_img=Image.fromarray(self.capture(if_d=False,vis=False,if_update=False)), text_prompt=['manipulated handle','untouched handle'],if_p=True) == 0 or self.arm.get_gripper_grasp_return(if_p=True) == 2):
                 self.this_pmt.ret = OPEN_MISS
@@ -686,8 +694,33 @@ class Primitive(object):
         print(f'========== Finish Done... ==========')
         return self.this_pmt.ret,self.this_pmt.error
     
+    def clear(self):
+        print(f'========== Clearing ... ==========')
+
+        self.action_num = 0
+
+        self.last_pmt = _Primitive(action="START",id=START,ret=1,param=[0,0,0],error="START")
+        self.this_pmt = _Primitive()
+
+        self.primitives = {0:self.last_pmt.to_list()}
+        
+        self.current_max = [0]*7
+        self.current_min = [0]*7
+        
+        if os.path.exists(self.tjt_dir):
+             shutil.rmtree(self.tjt_dir)
+        os.makedirs(self.tjt_dir)
+
+        ret = 1
+        error = "CLEAR"
+
+        print(f'========== Clear Done... ==========')
+        return ret,error
+
+
     def do_primitive(self,_id,_param):
         primitive_type = self.action2num(_id)
+        
         ## capture
         if primitive_type == -1:
             raise ValueError("Input error: Invalid primitive type value")
@@ -695,6 +728,7 @@ class Primitive(object):
             self.capture(if_d=True,vis=True,if_update=True)
         else:
             self.capture(if_d=False,vis=False,if_update=True)
+        
         ## do action
         if primitive_type == PREMOVE:
             ret,error = self.premove(premove_T=_param[0])
@@ -712,6 +746,8 @@ class Primitive(object):
             ret,error = self.finish()
         elif primitive_type == BACK:
             ret,error = self.back()
+        elif primitive_type == CLEAR:
+            ret,error = self.clear()
 
         self.capture(if_d=False,vis=False,if_update=False)
         
