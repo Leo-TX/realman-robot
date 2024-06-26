@@ -1,0 +1,20 @@
+{
+    "last_action": "PREMOVE",
+    "last_id": 1,
+    "last_ret": 1,
+    "last_param": [
+        1.1,
+        0,
+        0
+    ],
+    "last_error": "NONE",
+    "this_action": "GRASP",
+    "this_id": 2,
+    "this_ret": -1,
+    "this_param": [
+        -0.04,
+        0.03,
+        0.01
+    ],
+    "this_error": "GRASP_IK_FAIL"
+}
