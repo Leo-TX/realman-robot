@@ -32,7 +32,7 @@ from dmp import DMP
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 ## for safty
-GRASP_CURRENT_THRESHOLD_L = -10000
+GRASP_CURRENT_THRESHOLD_L = -15000
 GRASP_CURRENT_THRESHOLD_H = 15000
 
 UNLOCK_CURRENT_THRESHOLD_L = -18000
@@ -286,6 +286,8 @@ class Primitive(object):
 
     def start_current_monitor_thread(self, thresholds):
         self.current_data = {i: [] for i in range(7)}
+        self.current_max = [0]*7
+        self.current_min = [0]*7
         self.current_data_start_time = time.time()
         self.monitor_running = True
         self.current_monitor_thread = threading.Thread(target=self.current_monitor_loop, args=(thresholds,))
@@ -442,6 +444,8 @@ class Primitive(object):
                     break
             if tag1 == 0:
                 tag2 = self.arm.move_p(pos=self.goal_pos,vel=20,if_p=True)
+            else:
+                tag2 = -1
 
             ## close gripper
             print(f'Closing Gripper ...')
@@ -459,7 +463,7 @@ class Primitive(object):
                     self.this_pmt.ret = GRASP_IK_FAIL
                     self.this_pmt.error = "GRASP_IK_FAIL"
                 ## grasp success if clip detecting grasping or gripper detecting grasping
-                if self.arm.get_gripper_grasp_return(if_p=True) != 2:
+                elif self.arm.get_gripper_grasp_return(if_p=True) != 2:
                 # elif not(self.arm.get_gripper_grasp_return(if_p=True) == 2 or self.CLIP_detection(rgb_img=Image.fromarray(self.capture(if_d=False,vis=False,if_update=False)), text_prompt=['manipulated handle','untouched handle'],if_p=True) == 0):
                     self.this_pmt.ret = GRASP_MISS
                     self.this_pmt.error = "GRASP_MISS"
@@ -765,7 +769,7 @@ class Primitive(object):
                 action_id, *param = [x.strip() for x in user_input.split(',')]
                 param = [float(x) for x in param]
                 ret, error = self.do_primitive(action_id, param)
-                if error == 'FINISH':
+                if error == 'FINISH':   
                     break
             except Exception as e:
                 print(f"ERROR TYPE: {type(e)}: {e}")
