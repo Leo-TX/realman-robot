@@ -28,6 +28,7 @@ from dtsam import DTSAM
 from server import Server
 from ransac import RANSAC
 from dmp import DMP
+from _primitive import _Primitive
 
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -49,10 +50,6 @@ PUSH_DOOR_THRESHOLD_JOINT_4_H = 15000
 
 ## Primitive Types
 # DUAL = 0 # [0/1,0,0] # 0 for right 1 for left
-START = 1024
-FINISH = 2048
-BACK = 4096
-CLEAR = 9192
 
 HOME = 0 # [0,0,0]
 PREMOVE = 1 # [T,0,0]
@@ -60,6 +57,10 @@ GRASP = 2 # [dx,dy,dz]
 UNLOCK = 3 # [T,0,0]
 ROTATE = 4 # [T,0,0]
 OPEN = 5 # [T,0,0]
+START = 6
+FINISH = 7
+BACK = 8
+CLEAR = 9
 
 ## Error Types
 SUCCESS = 1
@@ -96,19 +97,6 @@ def time_it(func):
         return result
     return wrapper
 
-class _Primitive:
-    def __init__(self, action="START", id=START, ret=1, param=[0,0,0], error="START"):
-        self.action = action
-        self.id = id
-        self.ret = ret
-        self.param = param
-        self.error = error
-    
-    def to_list(self):
-        return [self.action, self.id, self.ret, self.param, self.error]
-    
-    def __str__(self):
-        return ''
 
 class Primitive(object):
     def __init__(self,root_dir='./',tjt_num=1):
@@ -129,7 +117,7 @@ class Primitive(object):
         self.action_num = 0
 
         self.last_pmt = _Primitive(action="START",id=START,ret=1,param=[0,0,0],error="START")
-        self.this_pmt = _Primitive()
+        self.this_pmt = _Primitive(action="START",id=START,ret=1,param=[0,0,0],error="START")
 
         self.primitives = {0:self.last_pmt.to_list()}
         
