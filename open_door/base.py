@@ -188,6 +188,16 @@ class Base(object):
     def disconnect(self):
         self.client_socket.close()
 
+    def move_to_door(self,door_plane_weights,point=[0,0,0],d2t_coefficient=1.0):
+        A,B,C,D = door_plane_weights
+        x,y,z = point
+        distance = abs(A * x + B * y + C * z + D) / np.sqrt(A**2 + B**2 + C**2)
+        T = distance*d2t_coefficient
+        print(f"distance: {distance}")
+        print(f"T: {T}")
+        self.move_T(T=T)
+
+
 if __name__ == "__main__":
     ## init
     host_ip = '192.168.10.10'

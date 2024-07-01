@@ -380,6 +380,28 @@ class Arm():
             tag2 = self.move_p(pos=pos,vel=execute_v,if_p=if_p)
         return tag1,tag2
 
+    def unlock_handle_rotate(self,Cx,Cy,direction,angle=90):
+        ## TODO begin
+        angle_rad = np.radians(angle)
+        if direction == 'clockwise':
+            left_top_point = [box[0],box[1]]
+            Ox,Oy = left_top_point
+            angle_rad *= -1
+
+        elif direction == 'counter-clockwise':
+            right_top_point = [box[2], box[1]]
+            Ox,Oy = right_top_point
+
+        Cx -= Ox
+        Cy -= Oy
+        rotated_Cx = Cx * np.cos(angle_rad) - Cy * np.sin(angle_rad)
+        rotated_Cy = Cx * np.sin(angle_rad) + Cy * np.cos(angle_rad)
+        rotated_Cx += Ox
+        rotated_Cy += Oy
+        ## TODO end
+
+
+
     def target2cam_xyzrpy_to_target2base_xyzrpy(self,target2cam_xyzrpy,if_gripper=True):
         cam2base_H = self.cam2base_H
         # print(f'cam2base_H:\n{cam2base_H}')
