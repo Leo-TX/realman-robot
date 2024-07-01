@@ -11,10 +11,10 @@ import torch
 from PolicyNetwork import PolicyNetwork,gen_dataloader
 
 N_EPOCHS = 100
-BATCH_SIZE = 16
-LR = 0.01
+BATCH_SIZE = 4
+LR = 0.001
 N_WORKERS = 0
-SHUFFLE = True
+SHUFFLE = False
 
 train_data_dir = './data/train_data'
 model_save_path = './checkpoints/PolicyNetwork3.pt'

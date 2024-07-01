@@ -377,13 +377,18 @@ class Primitive(object):
 
         ## dtsam
         print('DTSAM ...')
-        self.dtsam = DTSAM(img_path=rgb_img_path,classes='handle',device=device,threshold=0.3)
+        # TODO for pushbar
+        self.dtsam = DTSAM(img_path=rgb_img_path,classes='pushing handle',device=device,threshold=0.1)
         x1_2d,y1_2d,orientation,w,h = self.dtsam.get_xy_paramiko(self.server,remote_python_path,remote_root_dir,remote_img_dir)
         if w == 0 and h == 0:
             self.this_pmt.ret = GRASP_NO_HANDLE
             self.this_pmt.error = "GRASP_NO_HANDLE"
             print(f'[DTSAM Result] NO handle detections!!!')
         else:
+            ## for push bar
+            x1_2d+=150
+            ## for push bar
+            
             y1_2d -= 5 # for avoiding depth value error(zero)
             print(f'[DTSAM Result] x1_2d: {x1_2d}, y1_2d: {y1_2d}, orientation: {orientation}, w: {w}, h: {h}')
 
@@ -435,18 +440,23 @@ class Primitive(object):
             else:
                 tag2 = -1
 
-            ## close gripper
-            print(f'Closing Gripper ...')
-            if not(tag1 != 0  or tag2 != 0):
-                self.arm.control_gripper(open_value=50)
-                time.sleep(2)
+            # ## close gripper
+            # print(f'Closing Gripper ...')
+            # if not(tag1 != 0  or tag2 != 0):
+            #     self.arm.control_gripper(open_value=50)
+            #     time.sleep(2)
 
             ## SAFTY detection
             self.monitor_running = False
             self.current_monitor_thread.join()
             self.vis_current_data()
 
-            if self.this_pmt.ret == NO_SAFTY_ISSUE:
+            print(f'self.current_min[4-1]: {self.current_min[4-1]}')
+            
+            if self.this_pmt.ret == SAFTY_ISSUE or self.current_min[4-1] < -2000:
+                self.this_pmt.ret = GRASP_SAFTY
+                self.this_pmt.error = "GRASP_SAFTY"
+            elif self.this_pmt.ret == NO_SAFTY_ISSUE:
                 if tag1 !=0 or tag2 != 0:
                     self.this_pmt.ret = GRASP_IK_FAIL
                     self.this_pmt.error = "GRASP_IK_FAIL"
@@ -458,9 +468,6 @@ class Primitive(object):
                 else:
                     self.this_pmt.ret = SUCCESS
                     self.this_pmt.error = "NONE"
-            elif self.this_pmt.ret == SAFTY_ISSUE:
-                self.this_pmt.ret = GRASP_SAFTY
-                self.this_pmt.error = "GRASP_SAFTY"
         
         self.update()
         print(f'[Primitive INFO] ret: {self.this_pmt.ret}, error: {self.this_pmt.error}')
@@ -763,6 +770,59 @@ class Primitive(object):
                 print(f"ERROR TYPE: {type(e)}: {e}")
                 print("Please re-input!")
             print('***************************************************************\n\n')
+
+    def data_collection2(self):
+        ret, error = self.do_primitive('premove', [1])
+        ret, error = self.do_primitive('grasp', [0,0,0])
+        ret, error = self.do_primitive('open', [-3])
+        
+
+    def state_machine(self):
+        state = 1
+        while True:
+            if state == 1:
+                ret,error = self.do_primitive(_id=1,_param=1.0)
+                if ret != 1:
+                    pass
+                else:
+                    state = 2
+            if state == 2:
+                ret,error = self.do_primitive(_id=2,_param=[-0.04,0.03,0.01])
+                if ret != 1:
+                    if error == 'GRASP_IK_FAIL':
+                        state = 1
+                    elif error == 'GRASP_MISS':
+                        state = 2
+                    elif error == 'GRASP_SAFTY ':
+                        state = 2
+                else:
+                    state = 3
+            if state == 3:
+                ret,error = self.do_primitive(_id=3,_param=1.8)
+                if ret!= 1:
+                    if error == 'UNLOCK_IK_FAIL':
+                        state = 3
+                    elif error == 'UNLOCK_MISS':
+                        state = 3
+                    elif error == 'UNLOCK_SAFTY':
+                        state = 3
+                else:
+                    state = 4
+            if state == 4:
+                ret,error = self.do_primitive(_id=4,_param=2.0)
+                if ret!= 1:
+                    if error == 'OPEN_FAIL':
+                        ret,error = self.do_primitive(_id=4,_param=-2.0)
+                        state = 4
+
+                    elif error == 'OPEN_MISS':
+                        state = 4
+                    elif error == 'OPEN_SAFTY':
+                        state = 4
+                else:
+                    state = 5
+
+            
 
 if __name__ == '__main__':
     primitive = Primitive(root_dir='./',tjt_num=2)

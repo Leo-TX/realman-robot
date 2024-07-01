@@ -367,16 +367,16 @@ class Arm():
         tag = self.move_j(joint=joint_goal,vel=execute_v,if_p=if_p)
         return tag
 
-    def unlock_handle_move_p(self, T=1.0, execute_v=20,if_p=False):
+    def unlock_handle_move_p(self, T=1.0, execute_v=20,if_p=False): # T: positive means counter-clockwise; negative meansclockwise
         num=1
-        z_diff = T*VZ_SPEED
-        yaw_diff = T*VYAW_SPEED_DEGREE
+        z_diff = -abs(T)*VZ_SPEED
+        yaw_diff = -T*VYAW_SPEED_DEGREE
         for i in range(num):
             joint = self.get_j()
-            joint[6] -= yaw_diff*(i+1)/num
+            joint[6] += yaw_diff*(i+1)/num
             tag1 = self.move_j(joint=joint,vel=execute_v,if_p=if_p)
             pos = self.get_p()
-            pos[2] -= z_diff*(i+1)/num
+            pos[2] += z_diff*(i+1)/num
             tag2 = self.move_p(pos=pos,vel=execute_v,if_p=if_p)
         return tag1,tag2
 
@@ -465,7 +465,7 @@ if __name__ =="__main__":
     ## connect
     arm = Arm('192.168.10.19',8080,cam2base_H_path='cfg/cam2base_H.csv',if_gripper=True,if_monitor=False,tool_frame='dh3')# 18 for left 19 for right
     print(arm)
-    # arm.go_home()
+    arm.go_home()
     # arm.get_c(if_p=True)
     arm.control_gripper(open_value=1000)
     # arm.get_p(if_p=True)

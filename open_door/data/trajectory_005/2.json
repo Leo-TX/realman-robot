@@ -1,0 +1,20 @@
+{
+    "last_action": "GRASP",
+    "last_id": 2,
+    "last_ret": -1,
+    "last_param": [
+        -0.06,
+        0.04,
+        0.02
+    ],
+    "last_error": "GRASP_IK_FAIL",
+    "this_action": "GRASP",
+    "this_id": 2,
+    "this_ret": 0,
+    "this_param": [
+        -0.05,
+        0.04,
+        0.02
+    ],
+    "this_error": "GRASP_SAFTY"
+}
