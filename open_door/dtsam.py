@@ -51,7 +51,7 @@ class DTSAM():
         # print(f'Cx: {x}, Cy: {y}')
         # print(f'w: {w}, h: {h} orientation: {orientation}')
         # print(f'box:{box}')
-        return x,y,orientation,w,h
+        return x,y,orientation,w,h,box
 
 if __name__ == "__main__":
     dtsam = DTSAM(img_path='./images/image1/rgb.png',classes='handle',device='cuda:0',threshold=0.3)

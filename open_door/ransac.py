@@ -52,8 +52,11 @@ class RANSAC():
         with open(f'{os.path.dirname(local_rgb_img_path)}/ransac/ransac_result.json','r') as f:
             data = json.load(f)
             normal = data['normal']
-        # print(f'normal: {normal}')
-        return normal
+            weights = data['weights']
+            _3d_center = data['3d_center']
+            _2d_center = data['2d_center']
+            mask_color = data['mask_color']
+        return normal,weights,_3d_center,_2d_center,mask_color
 
 
 if __name__ == "__main__":  

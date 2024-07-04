@@ -216,6 +216,25 @@ class Camera(object):
             # print(f"Depth visualization saved to: {save_path}") 
         if show:
             plt.show()
+    
+    def rotate_point(self,x1_2d,y1_2d,box,direction,angle=90):
+        angle_rad = np.radians(angle)
+        if direction == 'clockwise':
+            left_top_point = [box[0],(box[1]+box[3])/2]
+            Ox,Oy = left_top_point
+        elif direction == 'counter-clockwise':
+            right_top_point = [box[2],(box[1]+box[3])/2]
+            Ox,Oy = right_top_point
+            angle_rad *= -1
+
+        x1_2d -= Ox
+        y1_2d -= Oy
+        x2_2d = x1_2d * np.cos(angle_rad) - y1_2d * np.sin(angle_rad)
+        y2_2d = x1_2d * np.sin(angle_rad) + y1_2d * np.cos(angle_rad)
+        x2_2d += Ox
+        y2_2d += Oy
+
+        return x2_2d,y2_2d
 
     def xy_depth_2_xyz(self,u,v,depth):
         fx = self.intrinsic.fx

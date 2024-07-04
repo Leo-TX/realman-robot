@@ -12,6 +12,7 @@ import os
 import sys
 import select
 import json
+import numpy as np
 
 class Base(object):
     def __init__(self,host_ip,host_port,linear_velocity,angular_velocity):
@@ -188,11 +189,11 @@ class Base(object):
     def disconnect(self):
         self.client_socket.close()
 
-    def move_to_door(self,door_plane_weights,point=[0,0,0],d2t_coefficient=1.0):
-        A,B,C,D = door_plane_weights
+    def move_to_door(self,door_plane_weights,point=[0,0,0],offset_in_front=0.6,d2t_coefficient=4.8):
+        D,A,B,C = door_plane_weights
         x,y,z = point
         distance = abs(A * x + B * y + C * z + D) / np.sqrt(A**2 + B**2 + C**2)
-        T = distance*d2t_coefficient
+        T = (distance-offset_in_front)*d2t_coefficient
         print(f"distance: {distance}")
         print(f"T: {T}")
         self.move_T(T=T)
@@ -202,16 +203,15 @@ if __name__ == "__main__":
     ## init
     host_ip = '192.168.10.10'
     host_port = 31001
-    linear_velocity = 0.1
-    angular_velocity = 0.2 #　0.2 for slow 1.0 for fast
+    linear_velocity = 0.2
+    angular_velocity = 0.1 #　0.2 for slow 1.0 for fast
     base = Base(host_ip,host_port,linear_velocity,angular_velocity)
 
     ## test move keyboard
     base.move_keyboard(interval=0.1)
-    # base.move_T(T=4) # 4 back to starting and -5 for in front of the door
 
     ## test move T
-    # base.move_T(T=5.0)
+    # base.move_T(T=3.0)
 
     # base.get_location()
     # time.sleep(0.5)
