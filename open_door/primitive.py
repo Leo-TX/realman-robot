@@ -150,7 +150,7 @@ class Primitive(object):
         self.camera = Camera(cam_params_path=self.cam_params_path,fps=30)
 
         ## init arm
-        self.arm = Arm('192.168.10.19',8080,cam2base_H_path=self.cam2base_H_path,if_gripper=True,if_monitor=False,tool_frame='dh3')# 18 for left 19 for right
+        self.arm = Arm('192.168.10.18',8080,cam2base_H_path=self.cam2base_H_path,if_gripper=True,if_monitor=False,tool_frame='dh3')# 18 for left 19 for right
         self.arm.control_gripper(open_value=1000)
         self.arm.go_home()
 

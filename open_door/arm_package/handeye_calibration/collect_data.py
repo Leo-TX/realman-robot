@@ -16,7 +16,7 @@ import sys
 sys.path.append('../..')
 from arm import Arm
 
-cam0_path = r'E:\realman-robot-2\open_door\arm_package\handeye_calibration\data\2024061301\\'
+cam0_path = r'E:\realman-robot\open_door\arm_package\handeye_calibration\data\2024070401\\'
 if not os.path.exists(cam0_path):
     os.makedirs(cam0_path)
 
@@ -58,6 +58,6 @@ def collect_data():
         cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    arm = Arm('192.168.10.19',8080)
+    arm = Arm('192.168.10.18',8080,cam2base_H_path='../../cfg/cam2base_H.csv')
     arm.change_tool_frame('dh3',if_p=True)
     collect_data()

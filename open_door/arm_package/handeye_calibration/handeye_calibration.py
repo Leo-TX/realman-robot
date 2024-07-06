@@ -81,27 +81,37 @@ def computer_data(now_forder):
             R_tool.append(tool_pose[0:3, 4 * i:4 * i + 3])
             t_tool.append(tool_pose[0:3, 4 * i + 3])
 
+        print('TSAI')
         R, t = cv2.calibrateHandEye(R_tool, t_tool, rvecs, tvecs, method=cv2.CALIB_HAND_EYE_TSAI)
-        #print(R)
+        print(R)
+        print(t)
+        print('HORAUD')
+        R, t = cv2.calibrateHandEye(R_tool, t_tool, rvecs, tvecs, method=cv2.CALIB_HAND_EYE_HORAUD)
+        print(R)
+        print(t)
+        print('DANIILIDIS')
+        R, t = cv2.calibrateHandEye(R_tool, t_tool, rvecs, tvecs, method=cv2.CALIB_HAND_EYE_DANIILIDIS)
+        print(R)
+        print(t)
+        # print('ANDREFF')
+        # R, t = cv2.calibrateHandEye(R_tool, t_tool, rvecs, tvecs, method=cv2.CALIB_HAND_EYE_ANDREFF)
+        # print(R)
         # print(t)
+        print('PARK')
         R, t = cv2.calibrateHandEye(R_tool, t_tool, rvecs, tvecs, method=cv2.CALIB_HAND_EYE_PARK)
         print(R)
         print(t)
-        R, t = cv2.calibrateHandEye(R_tool, t_tool, rvecs, tvecs, method=cv2.CALIB_HAND_EYE_HORAUD)
-        #print(R)
-        # print(t)
-        R, t = cv2.calibrateHandEye(R_tool, t_tool, rvecs, tvecs, method=cv2.CALIB_HAND_EYE_DANIILIDIS)
-        #print(R)
-        # print(t)
-        R, t = cv2.calibrateHandEye(R_tool, t_tool, rvecs, tvecs, method=cv2.CALIB_HAND_EYE_ANDREFF)
-        print(R)
-        print(t)
+
+        H = np.eye(4)
+        H[:3, :3] = R
+        H[:3, 3] = t.flatten()  # Or: H[:3, 3] = t.reshape(-1) 
+        np.savetxt("cam2base.csv", H, delimiter=",") 
 
     else:
         print("当前采集图片不足15张，请补充采集图片")
 
 def main():
-    now_forder = r'E:\realman-robot-2\open_door\arm_package\handeye_calibration\data\2024061301\\'
+    now_forder = r'E:\realman-robot\open_door\arm_package\handeye_calibration\data\2024070401\\'
     computer_data(now_forder)
 
 if __name__ == "__main__":

@@ -114,16 +114,23 @@ class ArmInfoMonitor:
                 self.images[0].save(self.gif_folder+'/current_monitor.gif', save_all=True, append_images=self.images[1:], optimize=False, duration=200, loop=0)
 
 class Arm():
-    def __init__(self, host_ip, host_port, cam2base_H_path=None, home_state=[0,-90,0,0,0,0,0], workspace_limits=[[-0.7, 0.7], [-0.7, 0.7], [0.00, 0.6]],if_gripper=False,if_monitor=False,gif_folder=None,tool_frame='dh3'):
+    def __init__(self, host_ip='192.168.10.19', host_port=8080, cam2base_H_path='cfg/cam2base_H.csv', workspace_limits=[[-0.7, 0.7], [-0.7, 0.7], [0.00, 0.6]],if_gripper=False,if_monitor=False,gif_folder=None,tool_frame='dh3'):
         self.host_ip = host_ip
         self.host_port = host_port
-        self.home_state = home_state
-        self.home_state1 = [-4.303,-95.307,-80.395,12.244,3.457,-8.106,20.592] #pose: [0.008727000094950199, -0.1794009953737259, -0.7527850270271301, -3.069000005722046, 0.050999999046325684, -0.5910000205039978]
+        self.cam2base_H_path = cam2base_H_path
         self.workspace_limits = workspace_limits
         self.if_gripper = if_gripper
         self.tool_frame = tool_frame
-        if cam2base_H_path:
-            with open(cam2base_H_path, newline='') as csvfile:
+        if self.host_ip == '192.168.10.19':
+            self.dual = 'right'
+            self.home_state = [-4.303,-95.307,-80.395,12.244,3.457,-8.106,20.592] #pose: [0.008727000094950199, -0.1794009953737259, -0.7527850270271301, -3.069000005722046, 0.050999999046325684, -0.5910000205039978]
+            self.cam2base_H_path = self.cam2base_H_path.replace('cam2base_H','cam2base_H_right')
+        elif self.host_ip == '192.168.10.18':
+            self.dual = 'left'
+            self.home_state = [168.33599853515625, 88.9260025024414, 84.23699951171875, 13.654000282287598, 3.6040000915527344, -0.6370000243186951, -159.24099731445312]
+            self.cam2base_H_path = self.cam2base_H_path.replace('cam2base_H','cam2base_H_left')
+        if self.cam2base_H_path:
+            with open(self.cam2base_H_path, newline='') as csvfile:
                 reader = csv.reader(csvfile, delimiter=',')
                 data = []
                 for row in reader:
@@ -196,7 +203,7 @@ class Arm():
         return value # 0-1000
 
     def go_home(self):
-        self.move_j(joint=self.home_state1,vel=20)
+        self.move_j(joint=self.home_state,vel=20)
     
     def get_p(self,if_p=False):
         pose = self.arm.Get_Current_Pose()
@@ -445,9 +452,9 @@ class Arm():
             self.arm.print_frame(frame)
         return frame
 
-    def manual_set_tool_frame(self,tool_name,pose=[0,0,0.16,0,0,0],payload=0, x=0, y=0, z=0, block=True,if_p=True):
+    def manual_set_tool_frame(self,tool_name,pose=[0,0,0.148,0,0,0],payload=0, x=0, y=0, z=0, block=True,if_p=True):
         self.arm.Manual_Set_Tool_Frame(tool_name, pose, payload, x, y, z, block)
-        frame = self.get_given_tool_frame(self,tool_name,if_p=False)
+        frame = self.get_given_tool_frame(tool_name,if_p=False)
         if if_p:
             print(f'set a new tool frame:')
             self.arm.print_frame(frame)
@@ -463,11 +470,15 @@ class Arm():
 
 if __name__ =="__main__":
     ## connect
-    arm = Arm('192.168.10.19',8080,cam2base_H_path='cfg/cam2base_H.csv',if_gripper=True,if_monitor=False,tool_frame='dh3')# 18 for left 19 for right
+    arm = Arm('192.168.10.18',8080,cam2base_H_path='cfg/cam2base_H.csv',if_gripper=True,if_monitor=False,tool_frame='dh3')# 18 for left 19 for right
     print(arm)
-    arm.go_home()
+    # arm.get_j(if_p=True)
+    # arm.go_home()
+    # arm.manual_set_tool_frame(tool_name='dh3',pose=[0,0,0.148,0,0,0],if_p=True)
+    # arm.get_current_tool_frame(if_p=True)
+    # arm.get_all_tool_frame(if_p=True)
     # arm.get_c(if_p=True)
-    arm.control_gripper(open_value=1000)
+    arm.control_gripper(open_value=300)
     # arm.get_p(if_p=True)
     # arm.move_p(pos=[0.6051296976350004, -0.35271136656822955, -0.1534878647732853, -1.536159878101188, -1.0257231725488505, -1.9371845128439396],vel=10)
     # arm.unlock_handle_move_j(T=1.8, execute_v=5)
