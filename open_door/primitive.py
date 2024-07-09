@@ -149,10 +149,15 @@ class Primitive(object):
         ## init camera
         self.camera = Camera(cam_params_path=self.cam_params_path,fps=30)
 
+        ## init right arm
+        self.arm_r = Arm('192.168.10.19',8080,cam2base_H_path=self.cam2base_H_path,if_gripper=True,if_monitor=False,tool_frame='dh3')# 18 for left 19 for right
+        self.arm_r.control_gripper(open_value=1000)
+        self.arm_r.go_home()
+        
         ## init arm
-        self.arm = Arm('192.168.10.18',8080,cam2base_H_path=self.cam2base_H_path,if_gripper=True,if_monitor=False,tool_frame='dh3')# 18 for left 19 for right
-        self.arm.control_gripper(open_value=1000)
-        self.arm.go_home()
+        self.arm_l = Arm('192.168.10.18',8080,cam2base_H_path=self.cam2base_H_path,if_gripper=True,if_monitor=False,tool_frame='dh3')# 18 for left 19 for right
+        self.arm_l.control_gripper(open_value=1000)
+        self.arm_l.go_home()
 
         ## init base
         self.base = Base(host_ip='192.168.10.10',host_port=31001,linear_velocity=0.2,angular_velocity=1.0)
@@ -168,11 +173,12 @@ class Primitive(object):
 
     def disconnect_robot(self):
         print('========== Disconnecting... ==========')
-        camera = camera.disconnect()
-        arm.disconnect()
-        base.disconnect()
-        head.disconnect()
-        server.disconnect()
+        self.camera.disconnect()
+        self.arm_r.disconnect()
+        self.arm_l.disconnect()
+        self.base.disconnect()
+        self.head.disconnect()
+        self.server.disconnect()
         print('========== Disconnected ==========')
 
     def __str__(self):
@@ -356,7 +362,7 @@ class Primitive(object):
         self.normal,self.weights,self._3d_center,self._2d_center,self.mask_color = self.ransac.get_normal_paramiko(self.server,self.remote_python_path,self.remote_root_dir,self.remote_img_dir)
         print(f'[RANSAC Result] normal: {self.normal} weights: {self.weights}')
 
-        self.base.move_to_door(self.weights)
+        self.base.move_to_door(self.weights,offset_in_front=0.7,d2t_coefficient=4.8) # 4.8 for 1311LabDoor # 4.6 for 0311LabInsideDoor2
         time.sleep(2)
 
         self.this_pmt.ret = SUCCESS
@@ -374,21 +380,12 @@ class Primitive(object):
         self.this_pmt.id = GRASP
         self.this_pmt.param = grasp_offset
 
-        if thresholds is None:
-            thresholds = self.grasp_thresholds
-        self.start_current_monitor_thread(thresholds=thresholds)
-
         rgb_img_path = f'{self.tjt_dir}/{self.action_num}/rgb.png'
         if not os.path.exists(os.path.dirname(rgb_img_path)):
             os.makedirs(os.path.dirname(rgb_img_path))
         shutil.copy2(self.rgb_img_path, rgb_img_path)
         d_img_path = self.d_img_path
         
-        refer_tjt_path = f'{self.tjt_dir}/{self.action_num}/dmp/refer_tjt.csv'
-        if not os.path.exists(os.path.dirname(refer_tjt_path)):
-            os.makedirs(os.path.dirname(refer_tjt_path))
-        shutil.copy2(self.dmp_refer_tjt_path, refer_tjt_path)
-
         ## dtsam
         print('DTSAM ...')
         self.dtsam = DTSAM(img_path=rgb_img_path,classes=self.handle_type,device=self.remote_device,threshold=0.1)
@@ -400,8 +397,18 @@ class Primitive(object):
         else:
             self.y1_2d -= 5 # for avoiding depth value error(zero)
             self.x2_2d,self.y2_2d = self.camera.rotate_point(self.x1_2d,self.y1_2d,self.box,direction='counter-clockwise',angle=90)
-            print(f'[center 2d point] x2_2d: {self.x2_2d}, y2_2d: {self.y2_2d}')
+            print(f'[center 2d point] x1_2d: {self.x1_2d}, y1_2d: {self.y1_2d}')
             print(f'[rotate 2d point] x2_2d: {self.x2_2d}, y2_2d: {self.y2_2d}')
+            
+            ## determin which arm
+            if self.x1_2d < self.camera.width/2:
+                self.arm = self.arm_l
+                self.r_l = 'left'
+                print(f'[Arm Choice]: LEFT')
+            else:
+                self.arm = self.arm_r
+                self.r_l = 'right'
+                print(f'[Arm Choice]: RIGHT')
 
             ## xy2xyz
             self.x1_3d,self.y1_3d,self.z1_3d,self.average_depth = self.camera.xy2xyz(self.x1_2d,self.y1_2d,d_img=d_img_path)
@@ -441,11 +448,20 @@ class Primitive(object):
 
             ## dmp
             print(f'DMP ...')
+            refer_tjt_path = f'{self.tjt_dir}/{self.action_num}/dmp/refer_tjt_{self.r_l}.csv'
+            if not os.path.exists(os.path.dirname(refer_tjt_path)):
+                os.makedirs(os.path.dirname(refer_tjt_path))
+            shutil.copy2(self.dmp_refer_tjt_path.replace('refer_tjt',f'refer_tjt_{self.r_l}'), refer_tjt_path)
             self.dmp = DMP(refer_tjt_path)
             self.new_tjt = self.dmp.gen_new_tjt(initial_pos=self.arm.get_p(),goal_pos=self.p1_3d_base_xyzrxryrz,show=False)
             # self.middle_pose = self.dmp.get_middle_pose(tjt=self.new_tjt,num=100)
             # print(f'[DMP Result] self.middle_pose: {self.middle_pose}')
             
+            ## SAFTY detection BEGIN
+            if thresholds is None:
+                thresholds = self.grasp_thresholds
+            self.start_current_monitor_thread(thresholds=thresholds)
+
             ## move to handle
             print(f'Moving ...')
             for num in range(90,100):
@@ -464,7 +480,7 @@ class Primitive(object):
                 self.arm.control_gripper(open_value=50)
                 time.sleep(2)
 
-            ## SAFTY detection
+            ## SAFTY detection END
             self.monitor_running = False
             self.current_monitor_thread.join()
             self.vis_current_data()

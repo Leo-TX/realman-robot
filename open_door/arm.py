@@ -114,11 +114,11 @@ class ArmInfoMonitor:
                 self.images[0].save(self.gif_folder+'/current_monitor.gif', save_all=True, append_images=self.images[1:], optimize=False, duration=200, loop=0)
 
 class Arm():
-    def __init__(self, host_ip='192.168.10.19', host_port=8080, cam2base_H_path='cfg/cam2base_H.csv', workspace_limits=[[-0.7, 0.7], [-0.7, 0.7], [0.00, 0.6]],if_gripper=False,if_monitor=False,gif_folder=None,tool_frame='dh3'):
+    def __init__(self, host_ip='192.168.10.19', host_port=8080, root_dir='./', cam2base_H_path='cfg/cam2base_H.csv',if_gripper=False,if_monitor=False,gif_folder=None,tool_frame='dh3'):
         self.host_ip = host_ip
         self.host_port = host_port
-        self.cam2base_H_path = cam2base_H_path
-        self.workspace_limits = workspace_limits
+        self.root_dir = root_dir
+        self.cam2base_H_path = f'{self.root_dir}/{cam2base_H_path}'
         self.if_gripper = if_gripper
         self.tool_frame = tool_frame
         if self.host_ip == '192.168.10.19':
@@ -473,14 +473,18 @@ if __name__ =="__main__":
     arm = Arm('192.168.10.18',8080,cam2base_H_path='cfg/cam2base_H.csv',if_gripper=True,if_monitor=False,tool_frame='dh3')# 18 for left 19 for right
     print(arm)
     # arm.get_j(if_p=True)
+    arm.get_p(if_p=True)
     # arm.go_home()
     # arm.manual_set_tool_frame(tool_name='dh3',pose=[0,0,0.148,0,0,0],if_p=True)
     # arm.get_current_tool_frame(if_p=True)
     # arm.get_all_tool_frame(if_p=True)
     # arm.get_c(if_p=True)
-    arm.control_gripper(open_value=300)
+    arm.control_gripper(open_value=500)
     # arm.get_p(if_p=True)
-    # arm.move_p(pos=[0.6051296976350004, -0.35271136656822955, -0.1534878647732853, -1.536159878101188, -1.0257231725488505, -1.9371845128439396],vel=10)
+    # arm.move_p(pos=[0.46181800961494446, 0.39524099230766296, -0.1702989935874939, -1.6469999551773071, -1.0670000314712524, -1.0640000104904175],vel=10)
+    # arm.go_home()
+    
+    # arm.move_p(pos=[0.5924130082130432, 0.4617370069026947, -0.15729199349880219, -1.5269999504089355, -1.059999942779541, -1.156999945640564],vel=10)
     # arm.unlock_handle_move_j(T=1.8, execute_v=5)
     # arm.arm.Joint_Teach_Cmd(num=7, direction=0, v=30, block=0)
     # arm.arm.Pos_Teach_Cmd(type=2, direction=0, v=30, block=0)
