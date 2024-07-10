@@ -59,7 +59,6 @@ class Arm():
         if if_gripper:
             self.connect_gripper(gripper_force,gripper_start_pos,gripper_vel)
     
-    
     @classmethod
     def init_from_yaml(cls,cfg_path='cfg/cfg_arm_right.yaml'):
         cfg = read_yaml_file(cfg_path, is_convert_dict_to_class=True)
@@ -176,7 +175,7 @@ class Arm():
             if tag1 == 0:
                 break
         if tag1 == 0:
-            tag2 = self.move_p(pos=self.pos,vel=vel,if_p=True)
+            tag2 = self.move_p(pos=pos,vel=vel,if_p=True)
         else:
             tag2 = -1
         return tag1 !=0 or tag2 != 0
@@ -369,11 +368,11 @@ if __name__ =="__main__":
     # arm.get_p(if_p=True)
     # arm.get_c(if_p=True)
 
-    ## go home
+    ## go home   
     # arm.go_home()
 
     ## gripper control
-    # arm.control_gripper(open_value=500)
+    arm_l.control_gripper(open_value=500)
 
     ## tool frame
     # arm.manual_set_tool_frame(tool_name='dh3',pose=[0,0,0.148,0,0,0],if_p=True)

@@ -13,7 +13,7 @@ import numpy as np
 import cv2
 import open3d
 import simplejson
-
+import yaml
 
 class CameraInfo():
 
@@ -23,7 +23,7 @@ class CameraInfo():
         # self._height = int(data["height"])  # int.
         # self._intrinsic_matrix = data["intrinsic_matrix"]  # list of float.
 
-        cfg = read_yaml_file(cfg_path, is_convert_dict_to_class=True)
+        cfg = read_yaml_file(cfg_cam, is_convert_dict_to_class=True)
         self._width = cfg.width
         self._height = cfg.height
         self._intrinsic_matrix = cfg.intrinsic_matrix

@@ -20,7 +20,7 @@ sys.path.append(root_dir)
 from primitive import Primitive
 
 def data_collection2(tjt_num):
-    primitive = Primitive(root_dir,tjt_num=tjt_num)
+    primitive = Primitive(root_dir=root_dir,tjt_num=tjt_num)
     primitive.data_collection2()
 
 def main(args):

@@ -97,25 +97,25 @@ def time_it(func):
     return wrapper
 
 class Primitive(object):
-    def __init__(self,cfg_path='./cfg/cfg.yaml',root_dir='./',tjt_num=1):
-        cfg = read_yaml_file(cfg_path, is_convert_dict_to_class=True)
+    def __init__(self,root_dir='./',tjt_num=1,cfg_path='./cfg/cfg.yaml'):
+        cfg = read_yaml_file(f'{root_dir}/{cfg_path}', is_convert_dict_to_class=True)
         self.cfg = cfg
 
         ## init two arms
-        arm_r = Arm.init_from_yaml(cfg_path=cfg.cfg_arm_right)
-        arm_r = Arm.init_from_yaml(cfg_path=cfg.cfg_arm_left)
+        self.arm_r = Arm.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_arm_right}')
+        self.arm_l = Arm.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_arm_left}')
         ## init camera
-        camera = Camera.init_from_yaml(cfg_path=cfg.cfg_cam)
+        self.camera = Camera.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_cam}')
         ## init base
-        base = Base.init_from_yaml(cfg_path=cfg.cfg_base)
+        self.base = Base.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_base}')
         ## init head
-        head = Head.init_from_yaml(cfg_path=cfg.cfg_head)
+        self.head = Head.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_head}')
         ## init server
-        server = Server.init_from_yaml(cfg_path=cfg.cfg_server)
+        self.server = Server.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_server}')
         ## init ransac
-        ransac = RANSAC(cfg_ransac=cfg.cfg_ransac,cfg_cam=cfg.cfg_cam)
+        self.ransac = RANSAC(cfg_ransac=f'{root_dir}/{cfg.cfg_ransac}',cfg_cam=f'{root_dir}/{cfg.cfg_cam}')
         ## init dtsam
-        dtsam = DTSAM.init_from_yaml(cfg_path=cfg.cfg_dtsam)
+        self.dtsam = DTSAM.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_dtsam}')
 
         ## remote
         self.remote_python_path = cfg.remote_python_path
@@ -135,6 +135,7 @@ class Primitive(object):
         self.this_pmt = _Primitive(action="START",id=START,ret=1,param=[0,0,0],error="START")
         self.primitives = {0:self.last_pmt.to_list()}
         
+        ## safty
         self.grasp_thresholds = [[GRASP_CURRENT_THRESHOLD_L, GRASP_CURRENT_THRESHOLD_H] for _ in range(6)]
         self.unlock_thresholds = [[UNLOCK_CURRENT_THRESHOLD_L, UNLOCK_CURRENT_THRESHOLD_H] for _ in range(6)]
         self.rotate_thresholds = [[ROTATE_CURRENT_THRESHOLD_L, ROTATE_CURRENT_THRESHOLD_H] for _ in range(6)]
@@ -232,7 +233,7 @@ class Primitive(object):
             return rgb_img
         # print(f'========== Image Captured ==========')
 
-    def start_current_monitor_thread(self, thresholds):
+    def start_current_monitor_thread(self,thresholds):
         self.current_data = {i: [] for i in range(7)}
         self.current_max = [0]*7
         self.current_min = [0]*7
@@ -242,7 +243,7 @@ class Primitive(object):
         self.current_monitor_thread.daemon = True
         self.current_monitor_thread.start()
 
-    def current_monitor_loop(self, thresholds):
+    def current_monitor_loop(self,thresholds):
         while self.monitor_running:
             current_check_result = self.check_current_safety(thresholds)
             if current_check_result == 0:
@@ -256,7 +257,7 @@ class Primitive(object):
                 self.this_pmt.error = 'NO_SAFTY_ISSUE'
             time.sleep(0.1)
 
-    def check_current_safety(self, thresholds):
+    def check_current_safety(self,thresholds):
         current = self.arm.get_c()
         for i in range(7):
             self.current_data[i].append(current[i])
@@ -267,7 +268,7 @@ class Primitive(object):
                 return 0
         return 1
 
-    def vis_current_data(self, save_path=None, show=False):
+    def vis_current_data(self,save_path=None,show=False):
         if save_path is None:
             save_path = f'{self.tjt_dir}/{self.action_num}_current.png'
         plt.figure()
@@ -285,14 +286,11 @@ class Primitive(object):
             plt.show()
 
     @time_it
-    def premove(self,premove_T):
+    def premove(self):
         print(f'========== Premoving ... ==========')
         self.this_pmt.action = "PREMOVE"
         self.this_pmt.id = PREMOVE
-        self.this_pmt.param = [premove_T,0,0]
-
-        # self.base.move_T(T=premove_T)
-        # time.sleep(2)
+        self.this_pmt.param = [0,0,0]
 
         rgb_img_path = f'{self.tjt_dir}/{self.action_num}/rgb.png'
         if not os.path.exists(os.path.dirname(rgb_img_path)):
@@ -315,11 +313,12 @@ class Primitive(object):
         return self.this_pmt.ret,self.this_pmt.error
     
     @time_it
-    def grasp(self,grasp_offset=[-0.04,0.03,0.01],thresholds=None):
+    def grasp(self,grasp_param,thresholds=None):
         print('========== Grasping... ==========')
         self.this_pmt.action = "GRASP"
         self.this_pmt.id = GRASP
-        self.this_pmt.param = grasp_offset
+        self.this_pmt.param = grasp_param
+        self.dx,self.dy,self.R = grasp_param
 
         rgb_img_path = f'{self.tjt_dir}/{self.action_num}/rgb.png'
         if not os.path.exists(os.path.dirname(rgb_img_path)):
@@ -335,11 +334,18 @@ class Primitive(object):
             self.this_pmt.error = "GRASP_NO_HANDLE"
             print(f'[DTSAM Result] NO handle detections!!!')
         else:
-            self.y1_2d -= 5 # for avoiding depth value error(zero)
-            self.x2_2d,self.y2_2d = rotate_point(self.x1_2d,self.y1_2d,self.box,direction='counter-clockwise',angle=90)
+            ##　grasp point 2d offset(dx,dy)
+            self.x1_2d += self.dx
+            self.y1_2d += self.dy
+            
+            ## rotate point
+            self.x2_2d,self.y2_2d,self.Ox,self.Oy = rotate_point(self.x1_2d,self.x2_2d,R=self.R,orientation=self.orientation,angle=90)
             print(f'[center 2d point] x1_2d: {self.x1_2d}, y1_2d: {self.y1_2d}')
             print(f'[rotate 2d point] x2_2d: {self.x2_2d}, y2_2d: {self.y2_2d}')
             
+            ## vis
+            vis_grasp(rgb_img_path,x1_2d,y1_2d,x2_2d,y2_2d,)
+
             ## determin which arm
             if self.x1_2d < self.camera.width/2:
                 self.arm = self.arm_l
@@ -376,10 +382,9 @@ class Primitive(object):
             print(f'[p1_3d_base_xyzrxryrz] {self.p1_3d_base_xyzrxryrz}')
             print(f'[p2_3d_base_xyzrxryrz] {self.p2_3d_base_xyzrxryrz}')
             
-            ## offset
-            for i in range(len(grasp_offset)):
-                self.p1_3d_base_xyzrxryrz[i] += grasp_offset[i]
-                self.p2_3d_base_xyzrxryrz[i] += grasp_offset[i]
+            ## offset(depth and rotation)
+            self.p1_3d_base_xyzrxryrz[0] += 0.0
+            self.p2_3d_base_xyzrxryrz[0] += 0.0
             self.p1_3d_base_xyzrxryrz[4] += np.pi/6
             self.p2_3d_base_xyzrxryrz[4] += np.pi/6
             print(f'[p1_3d_base_xyzrxryrz] {self.p1_3d_base_xyzrxryrz}')
@@ -392,7 +397,7 @@ class Primitive(object):
 
             ## move to handle(DMP)
             print(f'Moving ...')
-            tag = self.arm.move_p_dmp(self,pos=p1_3d_base_xyzrxryrz,vel=20,save_dir=f'{self.tjt_dir}/{self.action_num}/dmp/')
+            tag = self.arm.move_p_dmp(pos=self.p1_3d_base_xyzrxryrz,vel=10,save_dir=f'{self.tjt_dir}/{self.action_num}/dmp/')
 
             ## close gripper
             print(f'Closing Gripper ...')
@@ -414,7 +419,6 @@ class Primitive(object):
                 if tag:
                     self.this_pmt.ret = GRASP_IK_FAIL
                     self.this_pmt.error = "GRASP_IK_FAIL"
-                ## grasp success if clip detecting grasping or gripper detecting grasping
                 elif self.arm.get_gripper_grasp_return(if_p=True) != 2:
                     self.this_pmt.ret = GRASP_MISS
                     self.this_pmt.error = "GRASP_MISS"
@@ -675,13 +679,13 @@ class Primitive(object):
         
         ## do action
         if primitive_type == PREMOVE:
-            ret,error = self.premove(premove_T=_param[0])
+            ret,error = self.premove()
         elif primitive_type == GRASP:
-            ret,error = self.grasp(grasp_offset=_param[:3])
+            ret,error = self.grasp(grasp_param=_param[:3])
         elif primitive_type == ROTATE:
-            ret,error = self.rotate(rotate_T=_param[0])
+            ret,error = self.rotate()
         elif primitive_type == UNLOCK:
-            ret,error = self.unlock(unlock_T=_param[0])
+            ret,error = self.unlock()
         elif primitive_type == OPEN:
             ret,error = self.open(open_T=_param[0])
         elif primitive_type == HOME:
@@ -708,7 +712,10 @@ class Primitive(object):
             try:
                 action_id, *param = [x.strip() for x in user_input.split(',')]
                 param = [float(x) for x in param]
-                ret, error = self.do_primitive(action_id, param)
+                if param:
+                    ret, error = self.do_primitive(action_id, param)
+                else:
+                    ret, error = self.do_primitive(action_id)
                 if error == 'FINISH':   
                     break
             except Exception as e:
@@ -767,17 +774,5 @@ class Primitive(object):
                 else:
                     state = 5
 
-            
-
 if __name__ == '__main__':
     primitive = Primitive(root_dir='./',tjt_num=2)
-    # primitive.capture()
-    # primitive.premove(premove_T=-1)
-    # primitive.capture(if_d=True,vis=True)
-    # primitive.grasp(grasp_offset=[-0.04,0.03,0])
-    primitive.capture()
-    primitive.unlock(unlock_T=1.8)
-    # primitive.capture()
-    # primitive.open(open_T=3.0)
-    # primitive.capture()
-    # primitive.finish()

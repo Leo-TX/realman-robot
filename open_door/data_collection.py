@@ -6,21 +6,14 @@ Version: v1
 File: 
 Brief: 
 '''
-## input like: 
-# premove, 1.1
-# grasp, -0.04,0.03,0.01
-# rotate, 1.8
-# unlock, 1.8
-# open, 3.0
-
 import argparse
 import sys
-root_dir = './open_door'
+root_dir = './'
 sys.path.append(root_dir)
 from primitive import Primitive
 
 def data_collection(tjt_num):
-    primitive = Primitive(root_dir,tjt_num=tjt_num)
+    primitive = Primitive(root_dir=root_dir,tjt_num=tjt_num)
     primitive.data_collection()
 
 def main(args):

@@ -27,7 +27,7 @@ class DTSAM():
         x,y,orientation = detic_sam(img_path,self.classes,self.device,self.threshold)
         return x,y,orientation
 
-    def get_xy_paramiko(self,img_path,server,remote_python_path,remote_root_dir,remote_img_dir):
+    def get_xy_server(self,img_path,server,remote_python_path,remote_root_dir,remote_img_dir):
         remote_dtsam_script_dir = f'{remote_root_dir}/dtsam_package/'
         remote_dtsam_script_path = f'detic_sam.py'
         local_img_path = img_path
