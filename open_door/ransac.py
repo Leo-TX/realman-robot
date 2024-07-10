@@ -10,22 +10,20 @@ import os
 import json
 
 class RANSAC():
-    def __init__(self,rgb_img_path,d_img_path,config_file_path='cfg/ransac_cfg.yaml',camera_info_file_path='cfg/cam_params.json',vis=False):
-        self.rgb_img_path=rgb_img_path
-        self.d_img_path=d_img_path
-        self.config_file_path=config_file_path
-        self.camera_info_file_path=camera_info_file_path
+    def __init__(self,cfg_ransac='cfg/cfg_ransac.yaml',cfg_cam='cfg/cfg_cam.yaml',vis=False):
+        self.config_file_path=cfg_ransac
+        self.camera_info_file_path=cfg_cam
         self.vis=vis
 
-    def get_normal(self):
+    def get_normal(self,rgb_img_path,d_img_path):
         from ransac_package.plane_detector import plane_detector
-        normal = plane_detector(self.rgb_img_path,self.d_img_path,self.config_file_path,self.camera_info_file_path,self.vis)
+        normal = plane_detector(rgb_img_path,d_img_path,self.config_file_path,self.camera_info_file_path,self.vis)
         return normal
 
-    def get_normal_paramiko(self,server,remote_python_path,remote_root_dir,remote_img_dir):
-        local_rgb_img_path = self.rgb_img_path
+    def get_normal_server(self,rgb_img_path,d_img_path,server,remote_python_path,remote_root_dir,remote_img_dir):
+        local_rgb_img_path = rgb_img_path
         remote_rgb_img_path = f'{remote_img_dir}/{os.path.basename(local_rgb_img_path)}'
-        local_d_img_path = self.d_img_path
+        local_d_img_path = d_img_path
         remote_d_img_path = f'{remote_img_dir}/{os.path.basename(local_d_img_path)}'
         local_config_file_path = self.config_file_path
         remote_config_file_path = f'{remote_img_dir}/ransac/{os.path.basename(local_config_file_path)}'
@@ -58,7 +56,5 @@ class RANSAC():
             mask_color = data['mask_color']
         return normal,weights,_3d_center,_2d_center,mask_color
 
-
 if __name__ == "__main__":  
-    ransac = RANSAC(rgb_img_path='./images/image1/rgb.png',d_img_path='./images/image1/d.png',config_file_path='cfg/ransac_cfg.yaml',camera_info_file_path='cfg/cam_params.json',vis=False)
-    ransac.get_normal()
+    ransac = RANSAC(cfg_ransac='cfg/cfg_ransac.yaml',cfg_cam='cfg/cfg_cam.yaml',vis=False)

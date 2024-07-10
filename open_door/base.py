@@ -13,15 +13,26 @@ import sys
 import select
 import json
 import numpy as np
+from utils.lib_io import *
 
 class Base(object):
-    def __init__(self,host_ip,host_port,linear_velocity,angular_velocity):
+    def __init__(self,host_ip='192.168.10.10',host_port=31001,linear_velocity=0.2,angular_velocity=0.5):
         self.host_ip = host_ip
         self.host_port = host_port
         self.linear_velocity = linear_velocity
         self.angular_velocity = angular_velocity
-        self.connect()
 
+        self.connect()
+    
+    @classmethod
+    def init_from_yaml(cls,cfg_path='cfg/cfg_base.yaml'):
+        cfg = read_yaml_file(cfg_path, is_convert_dict_to_class=True)
+        return cls(cfg.host_ip,cfg.host_port,cfg.linear_velocity,cfg.angular_velocity)
+
+    def __str__(self):
+        print(f'[Base]: host_ip: {self.host_ip}, host_port: {self.host_port}, linear_velocity: {self.linear_velocity}, angular_velocity: {self.angular_velocity}')
+        return ''
+    
     def connect(self):
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         print('==========\nBase Connecting...')
@@ -101,6 +112,15 @@ class Base(object):
                 self.move_stop()
                 break
 
+    def move_to_door(self,door_plane_weights,point=[0,0,0],offset_in_front=0.6,d2t_coefficient=4.8):
+        D,A,B,C = door_plane_weights
+        x,y,z = point
+        distance = abs(A * x + B * y + C * z + D) / np.sqrt(A**2 + B**2 + C**2)
+        T = (distance-offset_in_front)*d2t_coefficient
+        print(f"distance: {distance}")
+        print(f"T: {T}")
+        self.move_T(T=T)
+
     def move_keyboard_win(self, interval=0.1):
         import msvcrt
         def getch():
@@ -135,6 +155,7 @@ class Base(object):
                     break
     
     def move_keyboard(self,interval=0.1):
+        print(f'Start Keyboard Control ...')
         if os.name == 'nt':  # Windows
             self.move_keyboard_win(interval)
         else:  # Linux
@@ -189,43 +210,13 @@ class Base(object):
     def disconnect(self):
         self.client_socket.close()
 
-    def move_to_door(self,door_plane_weights,point=[0,0,0],offset_in_front=0.6,d2t_coefficient=4.8):
-        D,A,B,C = door_plane_weights
-        x,y,z = point
-        distance = abs(A * x + B * y + C * z + D) / np.sqrt(A**2 + B**2 + C**2)
-        T = (distance-offset_in_front)*d2t_coefficient
-        print(f"distance: {distance}")
-        print(f"T: {T}")
-        self.move_T(T=T)
-
-
 if __name__ == "__main__":
     ## init
-    host_ip = '192.168.10.10'
-    host_port = 31001
-    linear_velocity = 0.2
-    angular_velocity = 0.3 #　0.2 for slow 1.0 for fast
-    base = Base(host_ip,host_port,linear_velocity,angular_velocity)
+    base = Base.init_from_yaml(cfg_path='cfg/cfg_base.yaml')
+    print(base)
 
-    ## test move keyboard
+    ## move keyboard
     base.move_keyboard(interval=0.1)
-
-    ## test move T
-    # base.move_T(T=3.0)
-
-    # base.get_location()
-    # time.sleep(0.5)
-    # base.move_char('a')
-    # time.sleep(1)
-
-    # base.get_location()
-    # location = [-24.1811, 27.3714, 2.6345]
-    # base.move_location(location)
-    # base.get_location()
-
-    # base.insert_marker(marker_name='1311')
-    # base.check_marker(marker_name='1311')
-    # base.move_marker(marker_name='1311')
 
     ## disconnct
     # base.disconnect()

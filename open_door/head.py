@@ -8,12 +8,24 @@ Brief:
 '''
 
 import serial
+from utils.lib_io import *
 
 class Head(object):
-    def __init__(self,port,baudrate):
+    def __init__(self,port='COM3',baudrate=9600,servo_1_position=400,servo_2_position=500):
         self.port = port
         self.baudrate = baudrate
         self.connect(self.port,self.baudrate)
+        self.servo_move(1000,1,servo_1_position)
+        self.servo_move(1000,2,servo_2_position)
+
+    @classmethod
+    def init_from_yaml(cls,cfg_path='cfg/cfg_head.yaml'):
+        cfg = read_yaml_file(cfg_path, is_convert_dict_to_class=True)
+        return cls(cfg.port,cfg.baudrate,cfg.servo_1_position,cfg.servo_2_position)
+
+    def __str__(self):
+        print(f'[Head]: port: {self.port}, baudrate: {self.baudrate}, servo1: {self.get_servo_angle(1)} servo1: {self.get_servo_angle(2)}')
+        return ''
 
     def connect(self,port,baudrate):
         print(f'==========\nHead connecting...')
@@ -51,7 +63,7 @@ class Head(object):
             print(f"Get Servo_{servo_id} Angle: {angle}")
         return angle
 
-    def servo_move(self,time, servo_id, angle,if_p=False):
+    def servo_move(self, time, servo_id, angle,if_p=False):
         '''
         @param time: the moving time(speed)
         @param servo_id: id=1: moving vertically; id=2: moving horizonally
@@ -66,13 +78,8 @@ class Head(object):
         self.ser.close()
 
 if __name__ == "__main__":
-    port = 'COM3' # Linux:'/dev/ttyUSB0' Win: 'COM3'
-    baudrate = 9600
-    head = Head(port,baudrate)
-    head.get_servo_angle(1,if_p=True)
-    head.get_servo_angle(2,if_p=True)
-    head.servo_move(1000, 1, 400,if_p=True)
-    head.servo_move(1000, 2, 500,if_p=True)
+    head = Head.init_from_yaml(cfg_path='cfg/cfg_head.yaml')
+    print(head)
 
     # disconnect
     head.disconnect()

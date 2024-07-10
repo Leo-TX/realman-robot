@@ -17,11 +17,17 @@ import simplejson
 
 class CameraInfo():
 
-    def __init__(self, camera_info_json_file_path):
-        data = read_json_file(camera_info_json_file_path)
-        self._width = int(data["width"])  # int.
-        self._height = int(data["height"])  # int.
-        self._intrinsic_matrix = data["intrinsic_matrix"]  # list of float.
+    def __init__(self, cfg_cam):
+        # data = read_json_file(cfg_cam)
+        # self._width = int(data["width"])  # int.
+        # self._height = int(data["height"])  # int.
+        # self._intrinsic_matrix = data["intrinsic_matrix"]  # list of float.
+
+        cfg = read_yaml_file(cfg_path, is_convert_dict_to_class=True)
+        self._width = cfg.width
+        self._height = cfg.height
+        self._intrinsic_matrix = cfg.intrinsic_matrix
+
         # The list extracted from the matrix **column by column** !!!.
         # If the intrinsic matrix is:
         # [fx,  0, cx],
@@ -130,7 +136,30 @@ def read_json_file(file_path):
         data = simplejson.load(f)
     return data
 
+def read_yaml_file(file_path, is_convert_dict_to_class=True):
+    with open(file_path, 'r') as stream:
+        data = yaml.safe_load(stream)
+    if is_convert_dict_to_class:
+        data = dict2class(data)
+    return data
 
+class SimpleNamespace:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+    def __repr__(self):
+        keys = sorted(self.__dict__)
+        items = ("{}={!r}".format(k, self.__dict__[k]) for k in keys)
+        return "{}({})".format(type(self).__name__, ", ".join(items))
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+def dict2class(args_dict):
+    args = SimpleNamespace()
+    args.__dict__.update(**args_dict)
+    return args
+    
 def is_int(num):
     ''' Is floating number very close to a int. '''
     # print(is_int(0.0000001)) # False

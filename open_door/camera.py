@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 import numpy as np
 import cv2
 import time
@@ -7,6 +5,8 @@ import pyrealsense2 as rs
 import keyboard
 import json
 import matplotlib.pyplot as plt
+
+from utils.lib_io import *
 
 class CamIntrinsic(object):
     def __init__(self,intrinsic):
@@ -24,16 +24,18 @@ class CamIntrinsic(object):
         return f"CamIntrinsic(\n  fx={self.fx},\n  fy={self.fy},\n  cx={self.cx},\n  cy={self.cy},\n  intrinsic_matrix=\n{self.intrinsic_matrix}\n)"
 
 class Camera(object):
+    def __init__(self,width=1280,height=720,intrinsic_matrix=None,depth_scale=0.001,fps=30):
+        self.width = width
+        self.height = height
+        self.intrinsic = CamIntrinsic(intrinsic_matrix)
+        self.depth_scale = depth_scale
 
-    def __init__(self,cam_params_path=None,fps=30):
-        with open(cam_params_path, 'r') as f:
-            data = json.load(f)
-        self.width = data['width']
-        self.height = data['height']
-        self.intrinsic = CamIntrinsic(data['intrinsic_matrix'])
-        self.depth_scale = data['depth_scale']
-        # connect
         self.connect(fps)
+
+    @classmethod
+    def init_from_yaml(cls,cfg_path='cfg/cfg_cam.yaml'):
+        cfg = read_yaml_file(cfg_path, is_convert_dict_to_class=True)
+        return cls(cfg.width,cfg.height,cfg.intrinsic_matrix,cfg.depth_scale,cfg.fps)
 
     def __str__(self):
         return f"RealSense(\n  width={self.width},\n  height={self.height},\n  {self.intrinsic.__str__()},\n  depth_scale={self.depth_scale}\n)"
@@ -169,31 +171,6 @@ class Camera(object):
             cv2.imwrite(save_path, visualized_depth)
             # print(f"Depth visualization saved to: {save_path}")
 
-
-    def normal2rxryrz(self,normal,if_p=False):
-        from scipy.spatial.transform import Rotation as R
-        original_normal = np.array(normal)
-        normal = original_normal * -1
-        z_axis = normal / np.linalg.norm(normal)
-        initial_x_axis = np.array([1, 0, 0])
-        x_axis = initial_x_axis - np.dot(initial_x_axis, z_axis) * z_axis
-        x_axis /= np.linalg.norm(x_axis)
-        y_axis = np.cross(z_axis, x_axis)
-        rotation_matrix = np.column_stack((x_axis, y_axis, z_axis))
-        euler_angles = R.from_matrix(rotation_matrix).as_euler('xyz')
-        rx,ry,rz = euler_angles
-        if if_p:
-            print(f'original_normal:\n{original_normal}')
-            print(f'normal:\n{normal}')
-            print(f'z_axis:\n{z_axis}')
-            print(f'initial_x_axis:\n{initial_x_axis}')
-            print(f'x_axis:\n{x_axis}')
-            print(f'y_axis:\n{y_axis}')
-            print(f'rotation_matrix:\n{rotation_matrix}')
-            print(f'euler_angles:\n{euler_angles}')
-            print(f'rx:{rx} ry:{ry} rz:{rz}')
-        return rx,ry,rz
-
     def vis_d(self,d_img_path,save_path,show=False):
         # Load the depth image
         depth_image = cv2.imread(d_img_path, cv2.IMREAD_ANYDEPTH)
@@ -216,25 +193,6 @@ class Camera(object):
             # print(f"Depth visualization saved to: {save_path}") 
         if show:
             plt.show()
-    
-    def rotate_point(self,x1_2d,y1_2d,box,direction,angle=90):
-        angle_rad = np.radians(angle)
-        if direction == 'clockwise':
-            left_top_point = [box[0],(box[1]+box[3])/2]
-            Ox,Oy = left_top_point
-        elif direction == 'counter-clockwise':
-            right_top_point = [box[2],(box[1]+box[3])/2]
-            Ox,Oy = right_top_point
-            angle_rad *= -1
-
-        x1_2d -= Ox
-        y1_2d -= Oy
-        x2_2d = x1_2d * np.cos(angle_rad) - y1_2d * np.sin(angle_rad)
-        y2_2d = x1_2d * np.sin(angle_rad) + y1_2d * np.cos(angle_rad)
-        x2_2d += Ox
-        y2_2d += Oy
-
-        return x2_2d,y2_2d
 
     def xy_depth_2_xyz(self,u,v,depth):
         fx = self.intrinsic.fx
@@ -269,7 +227,6 @@ class Camera(object):
         fy = self.intrinsic.fy
         cx = self.intrinsic.cx
         cy = self.intrinsic.cy
-
         if isinstance(d_img, str):
             d_img = cv2.imread(d_img, cv2.IMREAD_UNCHANGED)
 
@@ -289,10 +246,8 @@ class Camera(object):
         if valid_ratio < valid_ratio_threshold:
             print(f"ERROR: Not enough valid depth values around the point. Ratio: {valid_ratio:.2f}")
             return None 
-
         # 4. Calculate Average Depth 
         average_depth = np.mean(depth_roi[valid_depth_mask])
-
         # 5. Convert to 3D Coordinates
         x = (u - cx) * average_depth * self.depth_scale / fx
         y = (v - cy) * average_depth * self.depth_scale / fy
@@ -328,12 +283,10 @@ class Camera(object):
     def check_rs_resolution(self):
         device = self.profile.get_device()
         depth_sensor = device.first_depth_sensor()
-
         for profile in depth_sensor.get_stream_profiles():
             if profile.stream_type() == rs.stream.depth:
                 width, height = profile.as_video_stream_profile().width(), profile.as_video_stream_profile().height()
                 print(f"Depth Stream Resolution: {width} x {height}")
-
         for profile in device.query_sensors()[1].get_stream_profiles():
             if profile.stream_type() == rs.stream.color:
                 width, height = profile.as_video_stream_profile().width(), profile.as_video_stream_profile().height()
@@ -359,41 +312,28 @@ class Camera(object):
                     continue
                 color_image = np.asanyarray(color_frame.get_data())
                 cv2.imshow('RealSense RGB', color_image)
-
                 # Record if 'r' is pressed
                 if keyboard.is_pressed('r'):
                     recording = True
                     print("Recording started.")
-
                 # Pause recording if 'p' is pressed
                 if keyboard.is_pressed('p'):
                     recording = False
                     print("Recording paused.")
-
                 # Save frame to video if recording is enabled
                 if recording:
                     out.write(color_image)
                     frame_count += 1
-
                 # Press 'q' to exit
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
-
         finally:
             self.pipeline.stop()
             cv2.destroyAllWindows()
             out.release()
             print(f"Recording stopped. {frame_count} frames recorded.")
 
-if __name__ == "__main__":
-    image_dir = './images/image1/'
-    camera = Camera(f'cam_params_matlab_2.json')
-
-    print(camera)
     
-    # capture images
-    time.sleep(3)
-    rgb_img,d_img = camera.capture_rgbd(rgb_save_path=f'{image_dir}/rgb.png',d_save_path=f'{image_dir}/d.png')
-
-    # disconnect
-    camera.disconnect()
+if __name__ == "__main__":
+    camera = Camera.init_from_yaml(cfg_path='cfg/cfg_cam.yaml')
+    print(camera)

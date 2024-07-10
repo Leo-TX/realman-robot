@@ -6,26 +6,28 @@ Version: v1
 File: 
 Brief: 
 '''
-#coding=utf8
-import numpy as np
 import csv
 import sys
-import matplotlib.pyplot as plt
 import time
 import os
-from PIL import Image
 import socket
 import threading
+import numpy as np
+import matplotlib.pyplot as plt
+from PIL import Image
 
 from utils.math import *
+from utils.lib_io import *
+
 from arm_package.robotic_arm import Arm as ArmBase
+from dmp import DMP
 
 VZ_SPEED = 0.025 # 2.5cm/s
 VZ_SPEED_DEGREE = 14 # 14°/s
 VYAW_SPEED_DEGREE = 35 # 35°/s
 VYAW_SPEED_RADIAN = 25*np.pi/180
 
-## for dh_gripper:
+## for dh_gripper
 ADDRESS_INIT_GRIPPER = int(0x0100)
 ADDRESS_SET_FORCE = int(0x0101)
 ADDRESS_SET_POS = int(0X0103)
@@ -38,115 +40,31 @@ GRIPPER_PORT = 1
 GRIPPER_BAUDRATE = 115200
 GRIPPER_DEVICE = 1
 
-class ArmInfoMonitor:
-    def __init__(self, arm, refresh_freq=1, title='', gif_folder='./images/image1/current_monitor'):
-        self.arm = arm
-        self.title = title
-        self.refresh_freq = refresh_freq
-        self.gif_folder = gif_folder
-        self.fig, self.ax = plt.subplots()
-        self.times = []
-        self.values = [[] for _ in range(7)]  # List of empty lists for each joint
-        self.lines = []  # List to store line objects
-        self.plot_started = False
-        self.ax.legend()
-        self.ax.set_xlabel('Time')
-        self.ax.set_ylabel(self.title+' Value')
-        self.ax.set_title('Arm Information - ' + title)
-        self.images = []
-        self.num = 0
-        if not os.path.exists(self.gif_folder):
-            os.mkdir(self.gif_folder)
-
-    def update_plot(self):
-        print(f'===update')
-        self.ax.clear()
-        for joint in range(7):
-            self.ax.plot(self.times, self.values[joint], label=f'Joint {joint+1}')
-        self.ax.legend(loc='upper left')  # Set the legend location to upper left
-        self.ax.set_xlabel('Time/s')
-        self.ax.set_ylabel(self.title+' Value')
-        self.ax.set_title(self.ax.get_title())
-        self.fig.canvas.draw()
-
-        # Save the current plot as an image
-        self.fig.savefig(self.gif_folder+f'/info_img_{self.num}.png', format='png')
-        # Open the saved image
-        img = Image.open(self.gif_folder+f'/info_img_{self.num}.png')
-        # Append the image to a list
-        self.images.append(img)
-        # # close image
-        # img.close()
-        # # Remove the temporary image file
-        # os.remove(f'gif/info_img_{self.num}.png')
-        self.num += 1
-
-    def detect_info_realtime(self):
-        while True:
-            if self.title == 'current':
-                tag, values = self.arm.Get_Joint_Current()
-            elif self.title == 'voltage':
-                tag, values = self.arm.Get_Joint_Voltage()
-            elif self.title == 'joint':
-                tag, values = self.arm.Get_Joint_Degree()
-            else:
-                print(f'Wrong Parameter!')
-            # print(f'=== info: {values}')
-            for joint in range(7):
-                self.values[joint].append(values[joint])
-
-            self.times.append(time.time())
-
-            if not self.plot_started:
-                self.plot_started = True
-                plt.ion()  # Turn on interactive mode for dynamic updating
-                # plt.show()
-
-            if len(self.times) > 1:  # Update plot only after the first data point
-                self.update_plot()
-
-            plt.pause(1 / self.refresh_freq)
-
-            # Save the list of images as a GIF
-            if os.path.exists(self.gif_folder+'/current_monitor.gif'):
-                os.remove(self.gif_folder+'/current_monitor.gif')
-            if len(self.images) > 2:
-                self.images[0].save(self.gif_folder+'/current_monitor.gif', save_all=True, append_images=self.images[1:], optimize=False, duration=200, loop=0)
-
 class Arm():
-    def __init__(self, host_ip='192.168.10.19', host_port=8080, root_dir='./', cam2base_H_path='cfg/cam2base_H.csv',if_gripper=False,if_monitor=False,gif_folder=None,tool_frame='dh3'):
+    def __init__(self,host_ip='192.168.10.19',host_port=8080,cam2base_H_path='cfg/cam2base_H_right.csv',tool_frame='dh3',home_state=[0,0,0,0,0,0,0],arm_vel=15,dmp_refer_tjt_path='cfg/refer_tjt_right.csv',if_gripper=False,gripper_force=30,gripper_start_pos=1000,gripper_vel=50):
         self.host_ip = host_ip
         self.host_port = host_port
-        self.root_dir = root_dir
-        self.cam2base_H_path = f'{self.root_dir}/{cam2base_H_path}'
-        self.if_gripper = if_gripper
         self.tool_frame = tool_frame
-        if self.host_ip == '192.168.10.19':
-            self.dual = 'right'
-            self.home_state = [-4.303,-95.307,-80.395,12.244,3.457,-8.106,20.592] #pose: [0.008727000094950199, -0.1794009953737259, -0.7527850270271301, -3.069000005722046, 0.050999999046325684, -0.5910000205039978]
-            self.cam2base_H_path = self.cam2base_H_path.replace('cam2base_H','cam2base_H_right')
-        elif self.host_ip == '192.168.10.18':
-            self.dual = 'left'
-            self.home_state = [168.33599853515625, 88.9260025024414, 84.23699951171875, 13.654000282287598, 3.6040000915527344, -0.6370000243186951, -159.24099731445312]
-            self.cam2base_H_path = self.cam2base_H_path.replace('cam2base_H','cam2base_H_left')
-        if self.cam2base_H_path:
-            with open(self.cam2base_H_path, newline='') as csvfile:
-                reader = csv.reader(csvfile, delimiter=',')
-                data = []
-                for row in reader:
-                    data.append(row)
-            self.cam2base_H = np.array(data, dtype=np.float32)
-        else:
-            self.cam2base_H = None
-        # connect
+        self.home_state = home_state
+        self.cam2base_H = read_csv_file(cam2base_H_path)
+        self.arm_vel = arm_vel
+        self.dmp = DMP(dmp_refer_tjt_path)
+
+        self.if_gripper = if_gripper
+        self.gripper_force = gripper_force
+        self.gripper_start_pos = gripper_start_pos
+        self.gripper_vel = gripper_vel
+
         self.connect()
         if if_gripper:
-            self.connect_gripper()
-        if if_monitor:
-            self.current_monitor = ArmInfoMonitor(self.arm,refresh_freq=5, title='current',gif_folder=gif_folder)
-            # self.voltage_monitor = ArmInfoMonitor(self.arm,refresh_freq=5, title='voltage')
-            # self.joint_monitor = ArmInfoMonitor(self.arm,refresh_freq=5, title='joint')
-        
+            self.connect_gripper(gripper_force,gripper_start_pos,gripper_vel)
+    
+    
+    @classmethod
+    def init_from_yaml(cls,cfg_path='cfg/cfg_arm_right.yaml'):
+        cfg = read_yaml_file(cfg_path, is_convert_dict_to_class=True)
+        return cls(cfg.host_ip,cfg.host_port,cfg.cam2base_H_path,cfg.tool_frame,cfg.home_state,cfg.arm_vel,cfg.dmp_refer_tjt_path,cfg.if_gripper,cfg.gripper_force,cfg.gripper_start_pos,cfg.gripper_vel)
+
     def __str__(self):
         self.get_j()
         self.get_p()
@@ -166,9 +84,6 @@ class Arm():
     
     def get_api_version(self):
         self.arm.API_Version()
-
-    def start_current_monitor(self):
-        self.current_monitor.detect_info_realtime()
 
     def connect_gripper(self,force=30,start_pos=1000,vel=50):
         print('==========\nGripper Connecting...')
@@ -203,7 +118,7 @@ class Arm():
         return value # 0-1000
 
     def go_home(self):
-        self.move_j(joint=self.home_state,vel=20)
+        self.move_j(joint=self.home_state,vel=30)
     
     def get_p(self,if_p=False):
         pose = self.arm.Get_Current_Pose()
@@ -229,100 +144,107 @@ class Arm():
             print(f'[Arm INFO]: - {self.get_c.__name__}: {current}')
         return current
     
-    def move_j(self,joint,vel,trajectory_connect=0, r=0, block=True, if_p=False):
+    def move_j(self,joint,vel=None,trajectory_connect=0, r=0, block=True, if_p=False):
+        if not vel:
+            vel = self.arm_vel
         tag = self.arm.Movej_Cmd(joint, vel, trajectory_connect, r, block) 
         if if_p:
             print(f'[Arm INFO]: - {self.move_j.__name__}: {tag}')
         return tag
 
-    def move_p(self,pos,vel,trajectory_connect=0, r=0, block=True, if_p=False):
+    def move_p(self,pos,vel=None,trajectory_connect=0, r=0, block=True, if_p=False):
+        if not vel:
+            vel = self.arm_vel
         tag = self.arm.Movej_P_Cmd(pos, vel, trajectory_connect, r, block)
         if if_p:
             print(f'[Arm INFO]: - {self.move_p.__name__}: {tag}')
         return tag
 
-    def move_l(self,pos,vel,trajectory_connect=0, r=0, block=True, if_p=False):
+    def move_p_dmp(self,pos,vel=None,save_dir=None):
+        if not vel:
+            vel = self.arm_vel
+        if save_dir:
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
+            self.new_tjt = self.dmp.gen_new_tjt(initial_pos=self.get_p(),goal_pos=pos,if_save=True,tjt_save_path=f'{save_dir}/refer_tjt.csv',img_save_path=f'{save_dir}/dmp.png',show=False)
+        else:
+            self.new_tjt = self.dmp.gen_new_tjt(initial_pos=self.get_p(),goal_pos=pos,if_save=False)
+        # start moving
+        for num in range(90,100):
+            self.middle_pose = self.dmp.get_middle_pose(tjt=self.new_tjt,num=num)
+            tag1 = self.move_p(pos=self.middle_pose,vel=vel,if_p=True)
+            if tag1 == 0:
+                break
+        if tag1 == 0:
+            tag2 = self.move_p(pos=self.pos,vel=vel,if_p=True)
+        else:
+            tag2 = -1
+        return tag1 !=0 or tag2 != 0
+
+    def move_poses(self,poses,vel=None,trajectory_connect=1,if_p=False):
+        if not vel:
+            vel = self.arm_vel
+        for pos in poses:
+            self.move_p(pos=pos, vel=vel,trajectory_connect=trajectory_connect, r=0, block=True,if_p=if_p)
+
+    def move_l(self,pos,vel=None,trajectory_connect=0, r=0, block=True, if_p=False):
+        if not vel:
+            vel = self.arm_vel
         tag = self.arm.Movel_Cmd(pos, vel, trajectory_connect, r, block)
         if if_p:
             print(f'[Arm INFO]: - {self.move_l.__name__}: {tag}')
         return tag
 
-    def move_j_with_input(self,frame_name='Arm_Tip'):
-        if frame_name != 'Arm_Tip':
-            self.arm.Change_Tool_Frame(frame_name)
+    def move_j_with_input(self):
         while True:
             pose_input = input("Enter the pose (joint angles): ")
             if pose_input == 'q':
                 break
-
             pose_list = [float(num) for num in pose_input.split(',')]
-
             if len(pose_list) == 7:
                 pose_list.append(10)  # Default velocity
-
             joint_angles = pose_list[:7]
             velocity = int(pose_list[7])
             print(f'joints: {joint_angles}')
             print(f'velocity: {velocity}')
             self.move_j(joint_angles, velocity)
 
-    def move_p_with_input(self,frame_name='Arm_Tip'):
-        self.arm.Change_Tool_Frame(frame_name)
+    def move_p_with_input(self):
         while True:
             pose_input = input("Enter the pose: ")
             if pose_input == 'q':
                 break
-
             pose_list = [float(num) for num in pose_input.split(',')]
-
             if len(pose_list) == 6:
                 pose_list.append(10)  # Default velocity
-
             pose = pose_list[:6]
             # for i in range(3):
             #     pose[i] = pose[i] / 1000 # mm to m
-
             velocity = int(pose_list[6])
             print(f'pose: {pose}')
             print(f'velocity: {velocity}')
             self.move_p(pose, velocity)
 
-    def move_l_with_input(self,frame_name='Arm_Tip'):
-        self.arm.Change_Tool_Frame(frame_name)
+    def move_l_with_input(self):
         while True:
             pose_input = input("Enter the pose: ")
             if pose_input == 'q':
                 break
-
             pose_list = [float(num) for num in pose_input.split(',')]
-
             if len(pose_list) == 6:
                 pose_list.append(10)  # Default velocity
-
             pose = pose_list[:6]
             # for i in range(3):
             #     pose[i] = pose[i] / 1000 # mm to m
-
             velocity = int(pose_list[6])
             print(f'pose: {pose}')
             print(f'velocity: {velocity}')
             self.move_l(pose, velocity)
 
-    def move_poses(self,poses,vel=10,trajectory_connect=1,frame_name='Arm_Tip',if_p=False):
-        self.arm.Change_Tool_Frame(frame_name)
-        for pos in poses:
-            self.move_p(pos=pos, vel=vel,trajectory_connect=trajectory_connect, r=0, block=True,if_p=if_p)
-
-    def move_stop(self, if_p=False):
+    def move_stop(self,if_p=False):
         tag = self.arm.Move_Stop_Cmd(block=True)
         if if_p:
             print(f'[Arm INFO]: - {self.move_stop.__name__}: {tag}')
-
-    def else1(self,joint_diff=[0,5,0,0,0,-20,-45],vel=3): #overunlock:[0,8,0,0,0,-25,-50]
-        joint = self.get_j(if_p=False)
-        for i in range(7):
-            joint[i] += joint_diff[i]
-        self.arm.move_j(joint,vel)
 
     def rotate_handle_move_teach(self, T=1.0, v=30,if_p=False):
         start_time = time.time()
@@ -387,42 +309,14 @@ class Arm():
             tag2 = self.move_p(pos=pos,vel=execute_v,if_p=if_p)
         return tag1,tag2
 
-    def target2cam_xyzrpy_to_target2base_xyzrpy(self,target2cam_xyzrpy,if_gripper=True):
+    def target2cam_xyzrpy_to_target2base_xyzrpy(self,target2cam_xyzrpy):
         cam2base_H = self.cam2base_H
-        # print(f'cam2base_H:\n{cam2base_H}')
-
         target2cam_R = EulerAngle_to_R(np.array(target2cam_xyzrpy[3:]),rad=True)
         target2cam_t = xyz_to_t(np.array(target2cam_xyzrpy[:3]))
         target2cam_H = Rt_to_H(target2cam_R, target2cam_t)
-        # print(f'target2cam_H:\n{target2cam_H}')
-
         target2base_H = cam2base_H @ target2cam_H
-        # print(f'target2base_H:\n{target2base_H}')
-
-        if if_gripper:
-            tcp2base_H = self.gripper2base_H_to_tcp2base_H(gripper2base_H=target2base_H)
-            target2base_H = tcp2base_H
-
         target2base_xyzrpy = H_to_xyzrpy(target2base_H,rad=True)
-        # print(f'target2base_xyzrpy:\n{target2base_xyzrpy}')
-
         return target2base_xyzrpy.tolist()
-
-    def move_to_target(self,target2cam_xyzrpy):
-        target2base_xyzrpy = self.point_cam2base_xyzrpy(target2cam_xyzrpy)
-        self.move_p(target2base_xyzrpy)
-
-    def gripper2base_H_to_tcp2base_H(self,gripper2base_H):
-        tcp2gripper_xyzrpy = [0,0,-0.180,0,0,0]
-        tcp2gripper_H = xyzrpy_to_H(tcp2gripper_xyzrpy,rad=True)
-        tcp2base_H = tcp2gripper_H @ gripper2base_H
-        return tcp2base_H
-
-    def tcp2base_H_to_gripper2base_H(self,tcp2base_H):
-        tcp2gripper_xyzrpy = [0,0,-0.180,0,0,0]
-        tcp2gripper_H = xyzrpy_to_H(tcp2gripper_xyzrpy,rad=True)
-        gripper2base_H = tcp2base_H @ np.linalg.inv(tcp2gripper_H)
-        return gripper2base_H
 
     def get_current_tool_frame(self,if_p=False):
         tag, frame = self.arm.Get_Current_Tool_Frame()
@@ -461,40 +355,31 @@ class Arm():
         return frame
 
 
-    def else_functions(self):
-        # arm.Save_Trajectory(file_name='./test_tjt.txt')
-        # arm.MoveCartesianTool_Cmd(joint_cur=joint,movelengthx=0.000, movelengthy=0.00, movelengthz=0.00, m_dev=75, v=3, trajectory_connect=0, r=0)
-        # arm.MoveRotate_Cmd(rotateAxis=3, rotateAngle=90, choose_axis=[0,0,0,0,0,0], v=3, trajectory_connect=0, r=0, block=True)
-        # arm.Movec_Cmd(self, pose_via, pose_to, v, loop, trajectory_connect=0, r=0, block=True)
-        pass
-
 if __name__ =="__main__":
     ## connect
-    arm = Arm('192.168.10.18',8080,cam2base_H_path='cfg/cam2base_H.csv',if_gripper=True,if_monitor=False,tool_frame='dh3')# 18 for left 19 for right
-    print(arm)
+    arm_r = Arm.init_from_yaml(cfg_path='cfg/cfg_arm_right.yaml')
+    print(arm_r)
+    arm_l = Arm.init_from_yaml(cfg_path='cfg/cfg_arm_left.yaml')
+    print(arm_l)
+
+    arm = arm_r
+
+    ## get info
     # arm.get_j(if_p=True)
-    arm.get_p(if_p=True)
+    # arm.get_p(if_p=True)
+    # arm.get_c(if_p=True)
+
+    ## go home
     # arm.go_home()
+
+    ## gripper control
+    # arm.control_gripper(open_value=500)
+
+    ## tool frame
     # arm.manual_set_tool_frame(tool_name='dh3',pose=[0,0,0.148,0,0,0],if_p=True)
     # arm.get_current_tool_frame(if_p=True)
     # arm.get_all_tool_frame(if_p=True)
-    # arm.get_c(if_p=True)
-    arm.control_gripper(open_value=500)
-    # arm.get_p(if_p=True)
-    # arm.move_p(pos=[0.46181800961494446, 0.39524099230766296, -0.1702989935874939, -1.6469999551773071, -1.0670000314712524, -1.0640000104904175],vel=10)
-    # arm.go_home()
     
-    # arm.move_p(pos=[0.5924130082130432, 0.4617370069026947, -0.15729199349880219, -1.5269999504089355, -1.059999942779541, -1.156999945640564],vel=10)
-    # arm.unlock_handle_move_j(T=1.8, execute_v=5)
-    # arm.arm.Joint_Teach_Cmd(num=7, direction=0, v=30, block=0)
-    # arm.arm.Pos_Teach_Cmd(type=2, direction=0, v=30, block=0)
-    # arm.unlock_handle_move_teach(T=1.0,v=60,if_p=False)
-    # arm.unlock_handle_move_p( T=1.8, execute_v=5)
-
-
-    ## info: current monitor
-    # arm = Arm('192.168.10.19',8080,if_gripper=False,if_monitor=True,gif_folder='./images/image1/current_monitor/')
-    # arm.start_current_monitor()
-
     ## disconnect
-    arm.disconnect()
+    arm_r.disconnect()
+    arm_l.disconnect()

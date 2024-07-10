@@ -10,14 +10,26 @@ import paramiko
 import os
 import stat
 
+from utils.lib_io import *
+
 class Server():
     def __init__(self,hostname='130.126.136.95',username='zhi',password='yourpassword',if_stfp=True):
         self.hostname = hostname
         self.username = username
         self.password =  password
         self.if_stfp = if_stfp
+
         self.connect()
     
+    @classmethod
+    def init_from_yaml(cls,cfg_path='cfg/cfg_server.yaml'):
+        cfg = read_yaml_file(cfg_path, is_convert_dict_to_class=True)
+        return cls(cfg.hostname,cfg.username,cfg.password,cfg.if_stfp)
+
+    def __str__(self):
+        return f'[Server]: hostname: {self.hostname}, username: {self.username}, password: {self.password}, if_stfp: {self.if_stfp}'
+        return ''
+        
     def connect(self):
         print('==========\nServer Connecting...')
         self.client = paramiko.SSHClient() # Create an SSH client
@@ -93,5 +105,7 @@ class Server():
 
 
 if __name__ == "__main__":
-    server = Server(hostname='130.126.136.95',username='zhi',password='yourpassword',if_stfp=True)
+    server = Server.init_from_yaml(cfg_path='cfg/cfg_server.yaml')
+    print(server)
+    
     server.disconnect()

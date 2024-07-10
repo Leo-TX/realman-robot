@@ -1,0 +1,32 @@
+# ====================================================================== #
+# =============== Configurations for `primitive.py` ==================== #
+# ====================================================================== #
+
+cfg_cam: 'cfg/cfg_cam.yaml'
+cfg_arm_right: 'cfg/cfg_arm_right.yaml'
+cfg_arm_left: 'cfg/cfg_arm_left.yaml'
+cfg_base: 'cfg/cfg_base.yaml'
+cfg_head: 'cfg/cfg_head.yaml'
+cfg_server: 'cfg/cfg_server.yaml'
+cfg_ransac: 'cfg_ransac.yaml'
+cfg_dtsam: 'cfg_dtsam.yaml'
+
+premove:
+  offset_in_front: 0.7
+  d2t_coefficient: 4.8
+
+remote_python_path: '/media/datadisk10tb/leo/anaconda3/envs/rm/bin/python'
+remote_root_dir: '/media/datadisk10tb/leo/projects/realman-robot/open_door/'
+remote_img_dir: '/media/datadisk10tb/leo/projects/realman-robot/open_door/trajectory/remote/'
+
+safty:
+  GRASP_CURRENT_THRESHOLD_L: -15000
+  GRASP_CURRENT_THRESHOLD_H: 15000
+  UNLOCK_CURRENT_THRESHOLD_L: -18000
+  UNLOCK_CURRENT_THRESHOLD_H: 18000
+  ROTATE_CURRENT_THRESHOLD_L: -18000
+  ROTATE_CURRENT_THRESHOLD_H: 18000
+  OPEN_CURRENT_THRESHOLD_L: -25000
+  OPEN_CURRENT_THRESHOLD_H: 25000
+  PULL_DOOR_THRESHOLD_JOINT_4_L: -10000
+  PUSH_DOOR_THRESHOLD_JOINT_4_H: 15000

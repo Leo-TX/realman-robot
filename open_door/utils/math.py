@@ -101,6 +101,49 @@ def rotate_xyzrpy(xyzrpy,delta_r=0,delta_p=0,delta_y=0,rotate_order='zyx',rad=Fa
     new_xyzrpy = xyz_rpy_to_xyzrpy(np.array(xyzrpy[:3]), new_rpy).tolist()
     return new_xyzrpy
 
+def normal2rxryrz(normal,if_p=False):
+        from scipy.spatial.transform import Rotation as R
+        original_normal = np.array(normal)
+        normal = original_normal * -1
+        z_axis = normal / np.linalg.norm(normal)
+        initial_x_axis = np.array([1, 0, 0])
+        x_axis = initial_x_axis - np.dot(initial_x_axis, z_axis) * z_axis
+        x_axis /= np.linalg.norm(x_axis)
+        y_axis = np.cross(z_axis, x_axis)
+        rotation_matrix = np.column_stack((x_axis, y_axis, z_axis))
+        euler_angles = R.from_matrix(rotation_matrix).as_euler('xyz')
+        rx,ry,rz = euler_angles
+        if if_p:
+            print(f'original_normal:\n{original_normal}')
+            print(f'normal:\n{normal}')
+            print(f'z_axis:\n{z_axis}')
+            print(f'initial_x_axis:\n{initial_x_axis}')
+            print(f'x_axis:\n{x_axis}')
+            print(f'y_axis:\n{y_axis}')
+            print(f'rotation_matrix:\n{rotation_matrix}')
+            print(f'euler_angles:\n{euler_angles}')
+            print(f'rx:{rx} ry:{ry} rz:{rz}')
+        return rx,ry,rz
+
+def rotate_point(x1_2d,y1_2d,box,direction,angle=90):
+        angle_rad = np.radians(angle)
+        if direction == 'clockwise':
+            left_top_point = [box[0],(box[1]+box[3])/2]
+            Ox,Oy = left_top_point
+        elif direction == 'counter-clockwise':
+            right_top_point = [box[2],(box[1]+box[3])/2]
+            Ox,Oy = right_top_point
+            angle_rad *= -1
+
+        x1_2d -= Ox
+        y1_2d -= Oy
+        x2_2d = x1_2d * np.cos(angle_rad) - y1_2d * np.sin(angle_rad)
+        y2_2d = x1_2d * np.sin(angle_rad) + y1_2d * np.cos(angle_rad)
+        x2_2d += Ox
+        y2_2d += Oy
+
+        return x2_2d,y2_2d
+
 def test1():
     R = [[-0.06472430155853726,-0.9973381232093603,-0.03357726583553946,],[-0.9973485867817671,0.06353005346138718,0.03549265771403007],[-0.033265015138603936,0.03578547611006781,-0.9988057060647002]]
     R= [[-0.99978544 , 0.01618313,  0.01292909],[ 0.01924667 , 0.95650893  ,0.29106747],[-0.00765641  ,0.29125386 ,-0.95661516]]

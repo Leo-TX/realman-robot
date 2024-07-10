@@ -9,23 +9,28 @@ Brief:
 import os
 import json
 
+from utils.lib_io import *
 
 class DTSAM():
-    def __init__(self,img_path,classes='handle',device='cuda:0',threshold=0.3):
-        self.img_path = img_path
+    def __init__(self,classes='handle',device='cuda:0',threshold=0.3):
         self.classes = classes
         self.device = device
         self.threshold = threshold
+    
+    @classmethod
+    def init_from_yaml(cls,cfg_path='cfg/cfg_dtsam.yaml'):
+        cfg = read_yaml_file(cfg_path, is_convert_dict_to_class=True)
+        return cls(cfg.classes,cfg.device,cfg.threshold)
 
-    def get_xy(self):
+    def get_xy(self,img_path):
         from dtsam_package.detic_sam import detic_sam
-        x,y,orientation = detic_sam(self.img_path,self.classes,self.device,self.threshold)
+        x,y,orientation = detic_sam(img_path,self.classes,self.device,self.threshold)
         return x,y,orientation
 
-    def get_xy_paramiko(self,server,remote_python_path,remote_root_dir,remote_img_dir):
+    def get_xy_paramiko(self,img_path,server,remote_python_path,remote_root_dir,remote_img_dir):
         remote_dtsam_script_dir = f'{remote_root_dir}/dtsam_package/'
         remote_dtsam_script_path = f'detic_sam.py'
-        local_img_path = self.img_path
+        local_img_path = img_path
         remote_img_path = f'{remote_img_dir}/{os.path.basename(local_img_path)}'
 
         # transfer the input image file to the server
@@ -54,6 +59,4 @@ class DTSAM():
         return x,y,orientation,w,h,box
 
 if __name__ == "__main__":
-    dtsam = DTSAM(img_path='./images/image1/rgb.png',classes='handle',device='cuda:0',threshold=0.3)
-    x,y,orientation = dtsam.get_xy()
-    print(f'x: {x}, y: {y}, orientation: {orientation}')
+    dtsam = DTSAM.init_from_yaml(cfg_path='cfg/cfg_dtsam.yaml')

@@ -17,15 +17,21 @@ class DMP():
         self.dmp = dmp_discrete(n_dmps=self.data_dim, n_bfs=1000, dt=1.0/self.data_len)
         self.dmp.learning(self.refer_tjt)
     
-    def gen_new_tjt(self,initial_pos,goal_pos,tjt_save_path=None,img_save_path=None,show=False):
+    def gen_new_tjt(self,initial_pos,goal_pos,if_save=True,tjt_save_path=None,img_save_path=None,show=False):
         new_tjt, _, _ = self.dmp.reproduce(initial=initial_pos, goal=goal_pos)
-        if not tjt_save_path:
-            tjt_save_path = f'{self.tjt_dir}/new_tjt.csv'
-        df = pd.DataFrame(np.array(new_tjt))
-        df.to_csv(tjt_save_path, index=False, header=None)
-        if not img_save_path:
-            img_save_path = f'{self.tjt_dir}/dmp.png'
-        self.plot_tjt(self.refer_tjt,new_tjt,show=show,save_path=img_save_path)
+        
+        if if_save:
+            # save new tjt
+            if not tjt_save_path:
+                tjt_save_path = f'{self.tjt_dir}/new_tjt.csv'
+            df = pd.DataFrame(np.array(new_tjt))
+            df.to_csv(tjt_save_path, index=False, header=None)
+            
+            # save img
+            if not img_save_path:
+                img_save_path = f'{self.tjt_dir}/dmp.png'
+            self.plot_tjt(self.refer_tjt,new_tjt,show=show,save_path=img_save_path)
+        
         return new_tjt
 
     def get_poses(self,tjt,step=50,if_p=False):

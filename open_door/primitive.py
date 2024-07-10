@@ -13,11 +13,9 @@ import sys
 import os
 import shutil
 import json
-import clip
 import torch
 import threading
 from collections import namedtuple
-from PIL import Image
 from matplotlib import pyplot as plt
 
 from arm import Arm
@@ -30,7 +28,8 @@ from ransac import RANSAC
 from dmp import DMP
 from _primitive import _Primitive
 
-DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+from utils.math import *
+from utils.lib_io import *
 
 ## for safty
 GRASP_CURRENT_THRESHOLD_L = -15000
@@ -97,80 +96,50 @@ def time_it(func):
         return result
     return wrapper
 
-
 class Primitive(object):
-    def __init__(self,root_dir='./',tjt_num=1):
-        self.root_dir = root_dir
+    def __init__(self,cfg_path='./cfg/cfg.yaml',root_dir='./',tjt_num=1):
+        cfg = read_yaml_file(cfg_path, is_convert_dict_to_class=True)
+        self.cfg = cfg
 
-        # trajectory
+        ## init two arms
+        arm_r = Arm.init_from_yaml(cfg_path=cfg.cfg_arm_right)
+        arm_r = Arm.init_from_yaml(cfg_path=cfg.cfg_arm_left)
+        ## init camera
+        camera = Camera.init_from_yaml(cfg_path=cfg.cfg_cam)
+        ## init base
+        base = Base.init_from_yaml(cfg_path=cfg.cfg_base)
+        ## init head
+        head = Head.init_from_yaml(cfg_path=cfg.cfg_head)
+        ## init server
+        server = Server.init_from_yaml(cfg_path=cfg.cfg_server)
+        ## init ransac
+        ransac = RANSAC(cfg_ransac=cfg.cfg_ransac,cfg_cam=cfg.cfg_cam)
+        ## init dtsam
+        dtsam = DTSAM.init_from_yaml(cfg_path=cfg.cfg_dtsam)
+
+        ## remote
+        self.remote_python_path = cfg.remote_python_path
+        self.remote_root_dir = cfg.remote_root_dir
+        self.remote_img_dir = cfg.remote_img_dir
+
+        ## os
         self.tjt_num = tjt_num
+        self.action_num = 0
+        self.root_dir = root_dir
         self.tjt_dir = f'{self.root_dir}/data/trajectory_{self.tjt_num:03d}/'
         if os.path.exists(self.tjt_dir):
              shutil.rmtree(self.tjt_dir)
         os.makedirs(self.tjt_dir)
 
-        # cfg
-        self.cfg_dir = f'{self.root_dir}/cfg/'
-        self.cam_params_path = f'{self.cfg_dir}/cam_params.json'
-        self.cam2base_H_path = f'{self.cfg_dir}/cam2base_H.csv'
-        
-        self.action_num = 0
-
         self.last_pmt = _Primitive(action="START",id=START,ret=1,param=[0,0,0],error="START")
         self.this_pmt = _Primitive(action="START",id=START,ret=1,param=[0,0,0],error="START")
-
         self.primitives = {0:self.last_pmt.to_list()}
-        
-        self.clip_model, self.preprocess = None, None
         
         self.grasp_thresholds = [[GRASP_CURRENT_THRESHOLD_L, GRASP_CURRENT_THRESHOLD_H] for _ in range(6)]
         self.unlock_thresholds = [[UNLOCK_CURRENT_THRESHOLD_L, UNLOCK_CURRENT_THRESHOLD_H] for _ in range(6)]
         self.rotate_thresholds = [[ROTATE_CURRENT_THRESHOLD_L, ROTATE_CURRENT_THRESHOLD_H] for _ in range(6)]
         self.open_thresholds = [[OPEN_CURRENT_THRESHOLD_L, OPEN_CURRENT_THRESHOLD_H] for _ in range(6)]
         
-        self.current_max = [0]*7
-        self.current_min = [0]*7
-        
-        self.handle_type = 'handle' #'pushing handle'
-
-        self.remote_device = 'cuda:2'
-
-        self.remote_python_path = f'/media/datadisk10tb/leo/anaconda3/envs/rm/bin/python'
-        self.remote_root_dir = f'/media/datadisk10tb/leo/projects/realman-robot/open_door/'
-        self.remote_img_dir = f'{self.remote_root_dir}/data/trajectory{self.tjt_num}/{self.tjt_num}/'
-        
-        self.ransac_cfg_path = f'{self.cfg_dir}/ransac_cfg.yaml'
-        
-        self.dmp_refer_tjt_path = f'{self.cfg_dir}/refer_tjt.csv'
-
-        self.connect_robot()
-    
-    def connect_robot(self):
-        ## init camera
-        self.camera = Camera(cam_params_path=self.cam_params_path,fps=30)
-
-        ## init right arm
-        self.arm_r = Arm('192.168.10.19',8080,cam2base_H_path=self.cam2base_H_path,if_gripper=True,if_monitor=False,tool_frame='dh3')# 18 for left 19 for right
-        self.arm_r.control_gripper(open_value=1000)
-        self.arm_r.go_home()
-        
-        ## init arm
-        self.arm_l = Arm('192.168.10.18',8080,cam2base_H_path=self.cam2base_H_path,if_gripper=True,if_monitor=False,tool_frame='dh3')# 18 for left 19 for right
-        self.arm_l.control_gripper(open_value=1000)
-        self.arm_l.go_home()
-
-        ## init base
-        self.base = Base(host_ip='192.168.10.10',host_port=31001,linear_velocity=0.2,angular_velocity=1.0)
-        self.start_x,self.start_y,self.start_theta = self.base.get_location()
-
-        ## init head
-        self.head = Head(port='COM3',baudrate=9600)
-        self.head.servo_move(1000, 1, 400)
-        self.head.servo_move(1000, 2, 500)
-
-        ## init server
-        self.server = Server(hostname='130.126.136.95',username='zhi',password='yourpassword',if_stfp=True)
-
     def disconnect_robot(self):
         print('========== Disconnecting... ==========')
         self.camera.disconnect()
@@ -239,33 +208,6 @@ class Primitive(object):
         
         with open(save_path,'w') as json_file:
             json.dump(self.primitives,json_file,indent=4)
-
-    def CLIP(self,rgb_img, text_prompt, model_name = "ViT-B/32", if_p = False):
-        if self.clip_model is None or self.preprocess is None:
-            self.clip_model, self.preprocess = clip.load(model_name, device=DEVICE) # Load CLIP model
-        if isinstance(rgb_img,str):
-            rgb_img_input = self.preprocess(Image.open(rgb_img)).unsqueeze(0).to(DEVICE)# get rgb_img_input
-        else:
-            rgb_img_input = self.preprocess(rgb_img).unsqueeze(0).to(DEVICE)# get rgb_img_input
-        text_input = clip.tokenize(text_prompt).to(DEVICE)# get text_input
-        with torch.no_grad():
-            image_features = self.clip_model.encode_image(rgb_img_input)
-            text_features = self.clip_model.encode_text(text_input)
-            logits_per_image, logits_per_text = self.clip_model(rgb_img_input, text_input)
-            probs = logits_per_image.softmax(dim=-1).cpu().numpy()
-            if if_p:
-                print("Label probs:", probs)  # prints: [[0.9927937  0.00421068]]
-        return probs
-
-    def CLIP_detection(self,rgb_img=None,text_prompt=["door that is closed", "door that is open"],if_p=False):
-        if rgb_img is None:
-            rgb_img = Image.fromarray(self.capture(if_d=False,vis=False,if_update=False))
-        probs = self.CLIP(rgb_img, text_prompt) # using CLIP
-        result = 1 if probs[0][1] > probs[0][0] else 0 # Reward is 1 if closer to 'open door' prompt, 0 otherwise
-        if if_p:
-            # print("result:", result)  # prints: 1/0
-            print(f'[CLIP INFO] Result: {text_prompt[result]},\tLabel probs: {probs}') # door is open/closed
-        return result
 
     # @time_it
     def capture(self,if_d=False,vis=False,if_update=True):
@@ -358,8 +300,7 @@ class Primitive(object):
         shutil.copy2(self.rgb_img_path, rgb_img_path)
         d_img_path = self.d_img_path
 
-        self.ransac = RANSAC(rgb_img_path=rgb_img_path,d_img_path=d_img_path,config_file_path=self.ransac_cfg_path,camera_info_file_path=self.cam_params_path,vis=False)
-        self.normal,self.weights,self._3d_center,self._2d_center,self.mask_color = self.ransac.get_normal_paramiko(self.server,self.remote_python_path,self.remote_root_dir,self.remote_img_dir)
+        self.normal,self.weights,self._3d_center,self._2d_center,self.mask_color = self.ransac.get_normal_server(rgb_img_path,d_img_path,self.server,self.remote_python_path,self.remote_root_dir,self.remote_img_dir)
         print(f'[RANSAC Result] normal: {self.normal} weights: {self.weights}')
 
         self.base.move_to_door(self.weights,offset_in_front=0.7,d2t_coefficient=4.8) # 4.8 for 1311LabDoor # 4.6 for 0311LabInsideDoor2
@@ -388,15 +329,14 @@ class Primitive(object):
         
         ## dtsam
         print('DTSAM ...')
-        self.dtsam = DTSAM(img_path=rgb_img_path,classes=self.handle_type,device=self.remote_device,threshold=0.1)
-        self.x1_2d,self.y1_2d,self.orientation,self.w,self.h,self.box = self.dtsam.get_xy_paramiko(self.server,self.remote_python_path,self.remote_root_dir,self.remote_img_dir)
+        self.x1_2d,self.y1_2d,self.orientation,self.w,self.h,self.box = self.dtsam.get_xy_server(rgb_img_path,self.server,self.remote_python_path,self.remote_root_dir,self.remote_img_dir)
         if self.w == 0 and self.h == 0:
             self.this_pmt.ret = GRASP_NO_HANDLE
             self.this_pmt.error = "GRASP_NO_HANDLE"
             print(f'[DTSAM Result] NO handle detections!!!')
         else:
             self.y1_2d -= 5 # for avoiding depth value error(zero)
-            self.x2_2d,self.y2_2d = self.camera.rotate_point(self.x1_2d,self.y1_2d,self.box,direction='counter-clockwise',angle=90)
+            self.x2_2d,self.y2_2d = rotate_point(self.x1_2d,self.y1_2d,self.box,direction='counter-clockwise',angle=90)
             print(f'[center 2d point] x1_2d: {self.x1_2d}, y1_2d: {self.y1_2d}')
             print(f'[rotate 2d point] x2_2d: {self.x2_2d}, y2_2d: {self.y2_2d}')
             
@@ -418,19 +358,18 @@ class Primitive(object):
 
             ## ransac
             print('RANSAC ...')
-            self.ransac = RANSAC(rgb_img_path=rgb_img_path,d_img_path=d_img_path,config_file_path=self.ransac_cfg_path,camera_info_file_path=self.cam_params_path,vis=False)
-            self.normal,self.weights,self._3d_center,self._2d_center,self.mask_color = self.ransac.get_normal_paramiko(self.server,self.remote_python_path,self.remote_root_dir,self.remote_img_dir)
+            self.normal,self.weights,self._3d_center,self._2d_center,self.mask_color = self.ransac.get_normal_server(rgb_img_path,d_img_path,self.server,self.remote_python_path,self.remote_root_dir,self.remote_img_dir)
             print(f'[RANSAC Result] normal: {self.normal} weights: {self.weights}')
 
             ## normal2rxryrz
-            self.rx,self.ry,self.rz = self.camera.normal2rxryrz(self.normal)
+            self.rx,self.ry,self.rz = normal2rxryrz(self.normal)
             print(f'[normal2rxryrz Result] rx: {self.rx} ry: {self.ry} rz: {self.rz}')
 
             ## p1_3d_cam_xyzrxryrz 2 p1_3d_base_xyzrxryrz
             self.p1_3d_cam_xyzrxryrz = [self.x1_3d,self.y1_3d,self.z1_3d,self.rx,self.ry,self.rz]
             self.p2_3d_cam_xyzrxryrz = [self.x2_3d,self.y2_3d,self.z2_3d,self.rx,self.ry,self.rz]
-            self.p1_3d_base_xyzrxryrz = self.arm.target2cam_xyzrpy_to_target2base_xyzrpy(self.p1_3d_cam_xyzrxryrz,if_gripper=False)
-            self.p2_3d_base_xyzrxryrz = self.arm.target2cam_xyzrpy_to_target2base_xyzrpy(self.p2_3d_cam_xyzrxryrz,if_gripper=False)
+            self.p1_3d_base_xyzrxryrz = self.arm.target2cam_xyzrpy_to_target2base_xyzrpy(self.p1_3d_cam_xyzrxryrz)
+            self.p2_3d_base_xyzrxryrz = self.arm.target2cam_xyzrpy_to_target2base_xyzrpy(self.p2_3d_cam_xyzrxryrz)
             if self.orientation == 'horizontal':
                 self.p1_3d_base_xyzrxryrz[4] -= np.pi/2
                 self.p2_3d_base_xyzrxryrz[4] += np.pi
@@ -446,37 +385,18 @@ class Primitive(object):
             print(f'[p1_3d_base_xyzrxryrz] {self.p1_3d_base_xyzrxryrz}')
             print(f'[p2_3d_base_xyzrxryrz] {self.p2_3d_base_xyzrxryrz}')
 
-            ## dmp
-            print(f'DMP ...')
-            refer_tjt_path = f'{self.tjt_dir}/{self.action_num}/dmp/refer_tjt_{self.r_l}.csv'
-            if not os.path.exists(os.path.dirname(refer_tjt_path)):
-                os.makedirs(os.path.dirname(refer_tjt_path))
-            shutil.copy2(self.dmp_refer_tjt_path.replace('refer_tjt',f'refer_tjt_{self.r_l}'), refer_tjt_path)
-            self.dmp = DMP(refer_tjt_path)
-            self.new_tjt = self.dmp.gen_new_tjt(initial_pos=self.arm.get_p(),goal_pos=self.p1_3d_base_xyzrxryrz,show=False)
-            # self.middle_pose = self.dmp.get_middle_pose(tjt=self.new_tjt,num=100)
-            # print(f'[DMP Result] self.middle_pose: {self.middle_pose}')
-            
             ## SAFTY detection BEGIN
             if thresholds is None:
                 thresholds = self.grasp_thresholds
             self.start_current_monitor_thread(thresholds=thresholds)
 
-            ## move to handle
+            ## move to handle(DMP)
             print(f'Moving ...')
-            for num in range(90,100):
-                self.middle_pose = self.dmp.get_middle_pose(tjt=self.new_tjt,num=num)
-                tag1 = self.arm.move_p(pos=self.middle_pose,vel=20,if_p=True)
-                if tag1 == 0:
-                    break
-            if tag1 == 0:
-                tag2 = self.arm.move_p(pos=self.p1_3d_base_xyzrxryrz,vel=20,if_p=True)
-            else:
-                tag2 = -1
+            tag = self.arm.move_p_dmp(self,pos=p1_3d_base_xyzrxryrz,vel=20,save_dir=f'{self.tjt_dir}/{self.action_num}/dmp/')
 
             ## close gripper
             print(f'Closing Gripper ...')
-            if not(tag1 != 0  or tag2 != 0):
+            if not tag:
                 self.arm.control_gripper(open_value=50)
                 time.sleep(2)
 
@@ -491,12 +411,11 @@ class Primitive(object):
                 self.this_pmt.ret = GRASP_SAFTY
                 self.this_pmt.error = "GRASP_SAFTY"
             elif self.this_pmt.ret == NO_SAFTY_ISSUE:
-                if tag1 !=0 or tag2 != 0:
+                if tag:
                     self.this_pmt.ret = GRASP_IK_FAIL
                     self.this_pmt.error = "GRASP_IK_FAIL"
                 ## grasp success if clip detecting grasping or gripper detecting grasping
                 elif self.arm.get_gripper_grasp_return(if_p=True) != 2:
-                # elif not(self.arm.get_gripper_grasp_return(if_p=True) == 2 or self.CLIP_detection(rgb_img=Image.fromarray(self.capture(if_d=False,vis=False,if_update=False)), text_prompt=['manipulated handle','untouched handle'],if_p=True) == 0):
                     self.this_pmt.ret = GRASP_MISS
                     self.this_pmt.error = "GRASP_MISS"
                 else:
@@ -547,7 +466,6 @@ class Primitive(object):
                 self.this_pmt.ret = UNLOCK_IK_FAIL
                 self.this_pmt.error = "UNLOCK_IK_FAIL"
             elif self.arm.get_gripper_grasp_return(if_p=True) != 2:
-            # elif not(self.CLIP_detection(rgb_img=Image.fromarray(self.capture(if_d=False,vis=False,if_update=False)), text_prompt=['manipulated handle','untouched handle'],if_p=True) == 0 or self.arm.get_gripper_grasp_return(if_p=True) == 2):
                 self.this_pmt.ret = UNLOCK_MISS
                 self.this_pmt.error = "UNLOCK_MISS"
             else:
@@ -593,7 +511,6 @@ class Primitive(object):
                 self.this_pmt.ret = ROTATE_IK_FAIL
                 self.this_pmt.error = "ROTATE_IK_FAIL"
             elif self.arm.get_gripper_grasp_return(if_p=True) != 2:
-            # elif not(self.CLIP_detection(rgb_img=Image.fromarray(self.capture(if_d=False,vis=False,if_update=False)), text_prompt=['manipulated handle','untouched handle'],if_p=True) == 0 or self.arm.get_gripper_grasp_return(if_p=True) == 2):
                 self.this_pmt.ret = ROTATE_MISS
                 self.this_pmt.error = "ROTATE_MISS"
             else:
@@ -623,14 +540,8 @@ class Primitive(object):
         self.arm.control_gripper(open_value=50)
         time.sleep(1.5)
         print(f'opening ...')
-        # start_location = self.base.get_location()
-        # print(f'start_location:{start_location}')
         self.base.move_T(T=open_T)
         time.sleep(abs(open_T)+1)
-        # end_location = self.base.get_location()
-        # print(f'end_location:{end_location}')
-        # distance = np.sqrt((start_location[0]-end_location[0])**2+(start_location[1]-end_location[1])**2)
-        # print(f'[Base Info]: Distance: {distance}')
 
         ## SAFTY detection
         self.monitor_running = False
@@ -644,7 +555,6 @@ class Primitive(object):
                 self.this_pmt.error = "OPEN_FAIL"
                 print(f'curent_min_joint_4: {self.current_min[4-1]} curent_max_joint_4: {self.current_max[4-1]}')
             elif self.arm.get_gripper_grasp_return(if_p=True) != 2:
-            # elif not(self.CLIP_detection(rgb_img=Image.fromarray(self.capture(if_d=False,vis=False,if_update=False)), text_prompt=['manipulated handle','untouched handle'],if_p=True) == 0 or self.arm.get_gripper_grasp_return(if_p=True) == 2):
                 self.this_pmt.ret = OPEN_MISS
                 self.this_pmt.error = "OPEN_MISS"
             else:

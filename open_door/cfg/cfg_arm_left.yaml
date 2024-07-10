@@ -1,0 +1,11 @@
+host_ip: '192.168.10.18'
+host_port: 8080
+cam2base_H_path: 'cfg/cam2base_H_left.csv'
+tool_frame: 'dh3'
+home_state: [168.33599853515625,88.9260025024414,84.23699951171875,13.654000282287598,3.6040000915527344,-0.6370000243186951,-159.24099731445312]
+arm_vel: 15
+dmp_refer_tjt_path: 'cfg/refer_tjt_left.csv'
+if_gripper: True
+gripper_force: 30
+gripper_start_pos: 1000
+gripper_vel: 50
