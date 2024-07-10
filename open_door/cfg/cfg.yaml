@@ -18,9 +18,10 @@ remote_root_dir: '/media/datadisk10tb/leo/projects/realman-robot/open_door/'
 remote_img_dir: '/media/datadisk10tb/leo/projects/realman-robot/open_door/trajectory/remote/'
 
 ## primitive
-## 1.premove
+# 1. premove
 offset_in_front: 0.7
 d2t_coefficient: 4.8
+# 2. grasp
 
 safty:
   GRASP_CURRENT_THRESHOLD_L: -15000

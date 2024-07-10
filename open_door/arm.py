@@ -58,6 +58,7 @@ class Arm():
         self.connect()
         if if_gripper:
             self.connect_gripper(gripper_force,gripper_start_pos,gripper_vel)
+        self.home()
     
     @classmethod
     def init_from_yaml(cls,cfg_path='cfg/cfg_arm_right.yaml'):
@@ -78,6 +79,12 @@ class Arm():
         self.change_tool_frame(self.tool_frame)
         print('Arm Connected\n==========')
 
+    def home(self):
+        if self.if_gripper:
+            self.control_gripper(open_value=1000)
+        time.sleep(1)
+        self.go_home()
+
     def disconnect(self):
         self.arm.Arm_Socket_Close()
     
@@ -95,6 +102,7 @@ class Arm():
         tag, value = self.arm.Get_Read_Input_Registers(port=GRIPPER_PORT, address=ADDRESS_GET_GRIPPER_INIT_RETURN, device=GRIPPER_DEVICE)
         if value != 1: # 0: not init. 1: init is successful. 2: initializing
             print(f'[Arm Info] Init Failed: {value}!!!!!!! Re-init Gripper...')
+            time.sleep(0.1)
             self.connect_gripper()
         print('Gripper Connected\n==========')
         return tag
@@ -193,6 +201,10 @@ class Arm():
         if if_p:
             print(f'[Arm INFO]: - {self.move_l.__name__}: {tag}')
         return tag
+
+    def move_c(self):
+        pass
+        # Movec_Cmd(self, pose_via, pose_to, v, loop, trajectory_connect, r=0, block=True):
 
     def move_j_with_input(self):
         while True:

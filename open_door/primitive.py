@@ -30,6 +30,7 @@ from _primitive import _Primitive
 
 from utils.math import *
 from utils.lib_io import *
+from utils.lib_rgbd import *
 
 ## for safty
 GRASP_CURRENT_THRESHOLD_L = -15000
@@ -222,8 +223,8 @@ class Primitive(object):
                 os.makedirs(os.path.dirname(self.d_img_path))
             rgb_img,d_img = self.camera.capture_rgbd(rgb_save_path=self.rgb_img_path,d_save_path=self.d_img_path)
             if vis:
-                self.camera.vis_rgbd(d_img_path=self.d_img_path,rgb_img_path=self.rgb_img_path,save_path=f'{self.tjt_dir}/{self.action_num}/rgbd_vis.png')
-                self.camera.vis_d(d_img_path=self.d_img_path,save_path=f'{self.tjt_dir}/{self.action_num}/d_vis.png')
+                vis_rgbd(d_img_path=self.d_img_path,rgb_img_path=self.rgb_img_path,save_path=f'{self.tjt_dir}/{self.action_num}/rgbd_vis.png')
+                vis_d(d_img_path=self.d_img_path,save_path=f'{self.tjt_dir}/{self.action_num}/d_vis.png')
             return rgb_img,d_img 
         else:
             if if_update:
@@ -315,6 +316,7 @@ class Primitive(object):
     @time_it
     def grasp(self,grasp_param,thresholds=None):
         print('========== Grasping... ==========')
+        
         self.this_pmt.action = "GRASP"
         self.this_pmt.id = GRASP
         self.this_pmt.param = grasp_param
@@ -339,15 +341,16 @@ class Primitive(object):
             self.y1_2d += self.dy
             
             ## rotate point
-            self.x2_2d,self.y2_2d,self.Ox,self.Oy = rotate_point(self.x1_2d,self.x2_2d,R=self.R,orientation=self.orientation,angle=90)
-            print(f'[center 2d point] x1_2d: {self.x1_2d}, y1_2d: {self.y1_2d}')
-            print(f'[rotate 2d point] x2_2d: {self.x2_2d}, y2_2d: {self.y2_2d}')
+            self.x2_2d,self.y2_2d,self.Ox,self.Oy = rotate_point(self.x1_2d,self.y1_2d,R=self.R,orientation=self.orientation,angle=90)
+            print(f'[p1_2d] x1_2d: {self.x1_2d}, y1_2d: {self.y1_2d}')
+            print(f'[p2_wd] x2_2d: {self.x2_2d}, y2_2d: {self.y2_2d}')
+            print(f'[center] Ox: {self.Ox}, Oy: {self.Oy}')
             
             ## vis
-            vis_grasp(rgb_img_path,x1_2d,y1_2d,x2_2d,y2_2d,)
+            vis_grasp(rgb_img_path,self.x1_2d,self.y1_2d,self.x2_2d,self.y2_2d,self.Ox,self.Oy,self.R,self.orientation,angle=90,save_path=rgb_img_path.replace('rgb','vis_grasp'),show=False)
 
             ## determin which arm
-            if self.x1_2d < self.camera.width/2:
+            if self.x1_2d < self.camera.width / 2:
                 self.arm = self.arm_l
                 self.r_l = 'left'
                 print(f'[Arm Choice]: LEFT')
@@ -378,7 +381,10 @@ class Primitive(object):
             self.p2_3d_base_xyzrxryrz = self.arm.target2cam_xyzrpy_to_target2base_xyzrpy(self.p2_3d_cam_xyzrxryrz)
             if self.orientation == 'horizontal':
                 self.p1_3d_base_xyzrxryrz[4] -= np.pi/2
-                self.p2_3d_base_xyzrxryrz[4] += np.pi
+                if self.R > 0:
+                    self.p2_3d_base_xyzrxryrz[4] -= np.pi
+                else:
+                    self.p2_3d_base_xyzrxryrz[4] += 0
             print(f'[p1_3d_base_xyzrxryrz] {self.p1_3d_base_xyzrxryrz}')
             print(f'[p2_3d_base_xyzrxryrz] {self.p2_3d_base_xyzrxryrz}')
             
@@ -432,11 +438,12 @@ class Primitive(object):
         return self.this_pmt.ret,self.this_pmt.error
     
     @time_it
-    def unlock(self,unlock_T=1.5,thresholds=None):
+    def unlock(self,thresholds=None):
         print(f'========== Unlocking ... ==========')
+        
         self.this_pmt.action = "UNLOCK"
         self.this_pmt.id = UNLOCK
-        self.this_pmt.param = [unlock_T,0,0]
+        self.this_pmt.param = [0,0,0]
 
         if thresholds is None:
             thresholds = self.unlock_thresholds
@@ -449,8 +456,6 @@ class Primitive(object):
 
         ## unlock
         print(f'Unlocking ...')
-        # tag1,tag2 = self.arm.unlock_handle_move_p(T=unlock_T, execute_v=10,if_p=True)
-        # tag = (tag1 != 0  or tag2 != 0)
         tag = self.arm.move_p(pos=self.p2_3d_base_xyzrxryrz,vel=10)
         time.sleep(1)
         
@@ -485,11 +490,12 @@ class Primitive(object):
         return self.this_pmt.ret,self.this_pmt.error
 
     @time_it
-    def rotate(self,rotate_T=1.5,thresholds=None):
+    def rotate(self,thresholds=None):
         print(f'========== Rotating ... ==========')
+        
         self.this_pmt.action = "ROTATE"
         self.this_pmt.id = ROTATE
-        self.this_pmt.param = [rotate_T,0,0]
+        self.this_pmt.param = [0,0,0]
 
         if thresholds is None:
             thresholds = self.rotate_thresholds
@@ -502,8 +508,8 @@ class Primitive(object):
 
         ## rotate
         print(f'Rotating ...')
-        tag = self.arm.rotate_handle_move_j(T=rotate_T, execute_v=10,if_p=True)
-        time.sleep(1)
+        # tag = self.arm.rotate_handle_move_j(T=rotate_T, execute_v=10,if_p=True)
+        # time.sleep(1)
 
         ## SAFTY detection
         self.monitor_running = False
@@ -530,11 +536,12 @@ class Primitive(object):
         return self.this_pmt.ret,self.this_pmt.error
     
     @time_it
-    def open(self,open_T=2.0,thresholds=None):
+    def open(self,thresholds=None):
         print(f'========== Opening ... ==========')
+        
         self.this_pmt.action = "OPEN"
         self.this_pmt.id = OPEN
-        self.this_pmt.param = [open_T,0,0]
+        self.this_pmt.param = [0,0,0]
 
         if thresholds is None:
             thresholds = self.open_thresholds
@@ -544,8 +551,10 @@ class Primitive(object):
         self.arm.control_gripper(open_value=50)
         time.sleep(1.5)
         print(f'opening ...')
-        self.base.move_T(T=open_T)
-        time.sleep(abs(open_T)+1)
+        linear_T = 2.0
+        angular_T = 0.5
+        self.base.move_open_door(linear_T,angular_T)
+        time.sleep(abs(linear_T)+abs(angular_T)+1)
 
         ## SAFTY detection
         self.monitor_running = False
@@ -626,7 +635,7 @@ class Primitive(object):
         self.base.move_T(-0.5)
         time.sleep(1)
         self.arm.go_home()
-        self.base.move_location([self.start_x,self.start_y,self.start_theta])
+        self.base.move_location([self.base.start_x,self.base.start_y,self.base.start_theta])
         self.base.move_T(0.5)
         
         self.this_pmt.action = "FINISH"
@@ -665,8 +674,7 @@ class Primitive(object):
         print(f'========== Clear Done... ==========')
         return ret,error
 
-
-    def do_primitive(self,_id,_param):
+    def do_primitive(self,_id,_param=None):
         primitive_type = self.action2num(_id)
         
         ## capture
@@ -728,7 +736,6 @@ class Primitive(object):
         ret, error = self.do_primitive('grasp', [0,0,0])
         ret, error = self.do_primitive('open', [-3])
         
-
     def state_machine(self):
         state = 1
         while True:

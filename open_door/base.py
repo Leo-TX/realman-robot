@@ -37,6 +37,7 @@ class Base(object):
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         print('==========\nBase Connecting...')
         self.client_socket.connect((self.host_ip, self.host_port))
+        self.start_x,self.start_y,self.start_theta = self.get_location(if_p=False)
         print('Base Connected\n==========')
     
     def move_forward(self,vel=None):
@@ -112,6 +113,29 @@ class Base(object):
                 self.move_stop()
                 break
 
+    def move_open_door(self,linear_T,angular_T,linear_vel=None,angular_vel=None,if_p=False):
+        if not linear_vel:
+            linear_vel = self.linear_velocity
+        if not angular_vel:
+            angular_vel = self.angular_velocity
+        while True:
+            if linear_T<=0:
+                self.move_char(char='s')
+            else:
+                self.move_char(char='w')
+            if angular_T<=0:
+                self.move_char(char='a')
+            else:
+                self.move_char(char='d')
+            num+=1
+            time.sleep(0.01)
+            if if_p:
+                print(f'[Time]: {time.time() - start_time}')
+            if time.time() - start_time > abs(T):
+                self.move_stop()
+                break
+        
+    
     def move_to_door(self,door_plane_weights,point=[0,0,0],offset_in_front=0.6,d2t_coefficient=4.8):
         D,A,B,C = door_plane_weights
         x,y,z = point
