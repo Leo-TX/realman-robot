@@ -246,7 +246,6 @@ class Camera(object):
     def display_and_record(self):
         cv2.namedWindow('RealSense RGB', cv2.WINDOW_AUTOSIZE)
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
-        out = cv2.VideoWriter('realsense_clip.avi', fourcc, 30.0, (1280, 720))
         recording = False
         frame_count = 0
         try:
@@ -259,6 +258,7 @@ class Camera(object):
                 cv2.imshow('RealSense RGB', color_image)
                 # Record if 'r' is pressed
                 if keyboard.is_pressed('r'):
+                    out = cv2.VideoWriter('realsense_clip.avi', fourcc, 30.0, (1280, 720))
                     recording = True
                     print("Recording started.")
                 # Pause recording if 'p' is pressed
@@ -278,7 +278,7 @@ class Camera(object):
             out.release()
             print(f"Recording stopped. {frame_count} frames recorded.")
 
-    
 if __name__ == "__main__":
     camera = Camera.init_from_yaml(cfg_path='cfg/cfg_cam.yaml')
     print(camera)
+    camera.display_and_record()

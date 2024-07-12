@@ -41,14 +41,15 @@ GRIPPER_BAUDRATE = 115200
 GRIPPER_DEVICE = 1
 
 class Arm():
-    def __init__(self,host_ip='192.168.10.19',host_port=8080,cam2base_H_path='cfg/cam2base_H_right.csv',tool_frame='dh3',home_state=[0,0,0,0,0,0,0],arm_vel=15,dmp_refer_tjt_path='cfg/refer_tjt_right.csv',if_gripper=False,gripper_force=30,gripper_start_pos=1000,gripper_vel=50):
+    def __init__(self,root_dir='./',host_ip='192.168.10.19',host_port=8080,cam2base_H_path='cfg/cam2base_H_right.csv',tool_frame='dh3',home_state=[0,0,0,0,0,0,0],arm_vel=15,dmp_refer_tjt_path='cfg/refer_tjt_right.csv',if_gripper=False,gripper_force=30,gripper_start_pos=1000,gripper_vel=50):
+        self.root_dir = root_dir
         self.host_ip = host_ip
         self.host_port = host_port
         self.tool_frame = tool_frame
         self.home_state = home_state
-        self.cam2base_H = read_csv_file(cam2base_H_path)
+        self.cam2base_H = read_csv_file(f'{root_dir}/{cam2base_H_path}')
         self.arm_vel = arm_vel
-        self.dmp = DMP(dmp_refer_tjt_path)
+        self.dmp = DMP(f'{root_dir}/{dmp_refer_tjt_path}')
 
         self.if_gripper = if_gripper
         self.gripper_force = gripper_force
@@ -63,14 +64,15 @@ class Arm():
     @classmethod
     def init_from_yaml(cls,cfg_path='cfg/cfg_arm_right.yaml'):
         cfg = read_yaml_file(cfg_path, is_convert_dict_to_class=True)
-        return cls(cfg.host_ip,cfg.host_port,cfg.cam2base_H_path,cfg.tool_frame,cfg.home_state,cfg.arm_vel,cfg.dmp_refer_tjt_path,cfg.if_gripper,cfg.gripper_force,cfg.gripper_start_pos,cfg.gripper_vel)
+        return cls(cfg.root_dir,cfg.host_ip,cfg.host_port,cfg.cam2base_H_path,cfg.tool_frame,cfg.home_state,cfg.arm_vel,cfg.dmp_refer_tjt_path,cfg.if_gripper,cfg.gripper_force,cfg.gripper_start_pos,cfg.gripper_vel)
 
     def __str__(self):
-        self.get_j()
-        self.get_p()
-        self.get_v()
-        self.get_c()
-        self.get_api_version()
+        # self.get_j()
+        # self.get_p()
+        # self.get_v()
+        # self.get_c()
+        # self.get_api_version()
+        # self.get_current_tool_frame(if_p=True)
         return ''
 
     def connect(self):
@@ -124,8 +126,10 @@ class Arm():
             print(f'[Gripper INFO] Gripper Pos: {value}')
         return value # 0-1000
 
-    def go_home(self):
-        self.move_j(joint=self.home_state,vel=30)
+    def go_home(self,vel=None):
+        if not vel:
+            vel = self.arm_vel
+        self.move_j(joint=self.home_state,vel=vel)
     
     def get_p(self,if_p=False):
         pose = self.arm.Get_Current_Pose()
@@ -167,7 +171,7 @@ class Arm():
             print(f'[Arm INFO]: - {self.move_p.__name__}: {tag}')
         return tag
 
-    def move_p_dmp(self,pos,vel=None,save_dir=None):
+    def move_p_dmp(self,pos,vel=None,save_dir=None,if_p=False):
         if not vel:
             vel = self.arm_vel
         if save_dir:
@@ -179,11 +183,11 @@ class Arm():
         # start moving
         for num in range(90,100):
             self.middle_pose = self.dmp.get_middle_pose(tjt=self.new_tjt,num=num)
-            tag1 = self.move_p(pos=self.middle_pose,vel=vel,if_p=True)
+            tag1 = self.move_p(pos=self.middle_pose,vel=vel,if_p=if_p)
             if tag1 == 0:
                 break
         if tag1 == 0:
-            tag2 = self.move_p(pos=pos,vel=vel,if_p=True)
+            tag2 = self.move_p(pos=pos,vel=vel,if_p=if_p)
         else:
             tag2 = -1
         return tag1 !=0 or tag2 != 0
@@ -336,6 +340,14 @@ class Arm():
             self.arm.print_frame(frame)
         return frame
 
+    def get_current_work_frame(self,if_p=False):
+        tag, frame = self.arm.Get_Current_Work_Frame()
+        if if_p:
+            print(f'current tool frame:')
+            self.arm.print_frame(frame)
+        return frame
+
+
     def get_all_tool_frame(self,if_p=False):
         tag, tool_names, tool_len = self.arm.Get_All_Tool_Frame()
         if if_p:
@@ -368,23 +380,28 @@ class Arm():
 
 if __name__ =="__main__":
     ## connect
-    arm_r = Arm.init_from_yaml(cfg_path='cfg/cfg_arm_right.yaml')
-    print(arm_r)
+    # arm_r = Arm.init_from_yaml(cfg_path='cfg/cfg_arm_right.yaml')
+    # print(arm_r)
     arm_l = Arm.init_from_yaml(cfg_path='cfg/cfg_arm_left.yaml')
-    print(arm_l)
+    # print(arm_l)
 
-    arm = arm_r
+    arm = arm_l
 
     ## get info
-    # arm.get_j(if_p=True)
-    # arm.get_p(if_p=True)
+    arm.get_j(if_p=True)
+    arm.get_p(if_p=True)
     # arm.get_c(if_p=True)
 
     ## go home   
     # arm.go_home()
 
+    ## move
+    # arm.move_p(pos=[0.12317908357308621, -0.5464211211674885, 0.44482142917458123, -0.07637366085514001, 0.0785014252930375, -1.787004206391503],vel=10,if_p=True)
+    arm.move_p(pos=[0.12317908357308621, -0.5464211211674885, 0.44482142917458123, -1.0709999799728394, 0.4970000088214874, -3.072000026702881],vel=10,if_p=True)
+    # arm.move_p(pos=[0.0728359967470169, -0.5675070285797119, 0.4437209963798523, -1.0709999799728394, 0.4970000088214874, -3.072000026702881],vel=10,if_p=True)
+    
     ## gripper control
-    arm_l.control_gripper(open_value=500)
+    # arm.control_gripper(open_value=1000)
 
     ## tool frame
     # arm.manual_set_tool_frame(tool_name='dh3',pose=[0,0,0.148,0,0,0],if_p=True)
@@ -392,5 +409,5 @@ if __name__ =="__main__":
     # arm.get_all_tool_frame(if_p=True)
     
     ## disconnect
-    arm_r.disconnect()
-    arm_l.disconnect()
+    # arm_r.disconnect()
+    # arm_l.disconnect()

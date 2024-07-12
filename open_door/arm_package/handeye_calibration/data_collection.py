@@ -52,11 +52,10 @@ def data_collection(arm,data_folder=None):
         cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-    data_folder = r'E:/realman-robot/open_door/arm_package/handeye_calibration/data/left_arm/'
+    data_folder = r'E:/realman-robot/open_door/arm_package/handeye_calibration/data/left_arm_3/'
     if not os.path.exists(data_folder):
         os.makedirs(data_folder)
 
-    arm = Arm('192.168.10.18',8080,cam2base_H_path='../../cfg/cam2base_H.csv')
-    arm.change_tool_frame('dh3',if_p=True)
+    arm = Arm.init_from_yaml(cfg_path='../../cfg/cfg_arm_left.yaml')
 
     data_collection(arm,data_folder)

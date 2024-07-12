@@ -18,22 +18,22 @@ import sys
 root_dir = '../'
 sys.path.append(root_dir)
 from arm import Arm
-tjt_path = f'./example_data/data3/refer_tjt.csv'
+tjt_path = f'./example_data/data4/refer_tjt.csv'
 if not os.path.exists(os.path.dirname(tjt_path)):
     os.makedirs(os.path.dirname(tjt_path))
 
 print ('Program started')
-arm = Arm('192.168.10.18',8080,root_dir=root_dir)
+arm= Arm.init_from_yaml(cfg_path=f'{root_dir}/cfg/cfg_arm_left.yaml')
 
 # ## for right
 # initial_pos = [0.008727000094950199, -0.1794009953737259, -0.7527850270271301, -3.069000005722046, 0.050999999046325684, -0.5910000205039978]
 # middle_pose = [0.42829400300979614, -0.3133080005645752, -0.127469003200531, -1.5019999742507935, -1.1169999837875366, -2.009000062942505]
-# goal_pos = [0.5977209806442261, -0.3816089928150177, -0.13437800109386444, -1.6299999952316284, -1.0529999732971191, -1.9520000219345093] #(second point)
+# goal_pos = [0.5977209806442261, -0.3816089928150177, -0.13437800109386444, -1.6299999952316284, -1.0529999732971191, -1.9520000219345093]
 
 ## for left
-initial_pos = [0.038137998431921005, 0.24267399311065674, -0.7524719834327698, 3.128999948501587, 0.01899999938905239, -0.3230000138282776]
-middle_pose = [0.46181800961494446, 0.39524099230766296, -0.1702989935874939, -1.6469999551773071, -1.0670000314712524, -1.0640000104904175]
-goal_pos = [0.5924130082130432, 0.4617370069026947, -0.15729199349880219, -1.5269999504089355, -1.059999942779541, -1.156999945640564] #(second point)
+initial_pos = [0.7207099795341492, -0.20441000163555145, 0.2483779937028885, -1.5809999704360962, 0.515999972820282, -2.0369999408721924]
+middle_pose = [0.08501899987459183, -0.42847099900245667, 0.375230997800827, -1.1480000019073486, 0.5239999890327454, -3.125999927520752]
+goal_pos = [0.0728359967470169, -0.5675070285797119, 0.4437209963798523, -1.0709999799728394, 0.4970000088214874, -3.072000026702881]
 
 pos_record_x = list()
 pos_record_y = list()
@@ -87,8 +87,8 @@ data_thread.start()
 
 # --- Initial Movements (Will happen concurrently with data collection) ---
 # arm.go_home()
-arm.move_p(middle_pose, vel=10)
-arm.move_p(goal_pos, vel=10)
+arm.move_p(middle_pose)
+arm.move_p(goal_pos)
 record_enable = True  # Data recording will start now
 
 # --- Wait for the data collection thread to finish (you'll likely need a different exit condition here) ---

@@ -18,19 +18,86 @@ remote_root_dir: '/media/datadisk10tb/leo/projects/realman-robot/open_door/'
 remote_img_dir: '/media/datadisk10tb/leo/projects/realman-robot/open_door/trajectory/remote/'
 
 ## primitive
-# 1. premove
-offset_in_front: 0.7
-d2t_coefficient: 4.8
-# 2. grasp
+premove:
+  offset_in_front: 0.7
+  d2t_coefficient: 4.8
+grasp:
+  gripper_value: 50
+  p1_z_offset: 0.00
+  p2_z_offset: 0.02
+unlock:
+  gripper_value_before: 300 
+  gripper_value_after: 50
+rotate:
+  gripper_value: 50
+open:
+  gripper_value: 50
+  linear_T: 2.0
+  angular_T: 0.5
+home:
+  gripper_value: 1000
+  move_T: 0.5
+back:
+  gripper_value: 1000
+finish:
+  gripper_value: 1000
+  move_T: 0.5
 
-safty:
-  GRASP_CURRENT_THRESHOLD_L: -15000
-  GRASP_CURRENT_THRESHOLD_H: 15000
-  UNLOCK_CURRENT_THRESHOLD_L: -18000
-  UNLOCK_CURRENT_THRESHOLD_H: 18000
-  ROTATE_CURRENT_THRESHOLD_L: -18000
-  ROTATE_CURRENT_THRESHOLD_H: 18000
-  OPEN_CURRENT_THRESHOLD_L: -25000
-  OPEN_CURRENT_THRESHOLD_H: 25000
-  PULL_DOOR_THRESHOLD_JOINT_4_L: -10000
-  PUSH_DOOR_THRESHOLD_JOINT_4_H: 15000
+## threshold
+threshold:
+  grasp:
+    l: -15000
+    h: 15000
+  unlock:
+    l: -18000
+    h: 18000
+    stop_l: -10000 ## todo
+    stop_h: 10000 ## todo
+  rotate:
+    l: -18000
+    h: 18000
+    stop_l: -10000 ## todo
+    stop_h: 10000 ## todo
+  open:
+    l: -25000
+    h: 25000
+    pull_j3_l: -10000
+    push_j3_h: 15000
+
+## primitive types
+pmts:
+  home: 0
+  premove: 1
+  grasp: 2
+  unlock: 3
+  rotate: 4
+  open: 5
+  start: 6
+  finish: 7
+  back: 8
+  clear: 9
+
+## error types
+errors:
+  success: 1
+  current:
+    safety_issue: 1024
+    event_detected: 2048
+    no_issue: 4096
+  grasp:
+    grasp_safety: 0
+    grasp_no_handle: -1
+    grasp_ik_fail: -1
+    grasp_miss: -1
+  rotate:
+    rotate_safety: 0
+    rotate_miss: -1
+    rotate_ik_fail: -1
+  unlock:
+    unlock_safety: 0
+    unlock_miss: -1
+    unlock_ik_fail: -1
+  open:
+    open_safety: 0
+    open_miss: -1
+    open_fail: -1

@@ -32,60 +32,6 @@ from utils.math import *
 from utils.lib_io import *
 from utils.lib_rgbd import *
 
-## for safty
-GRASP_CURRENT_THRESHOLD_L = -15000
-GRASP_CURRENT_THRESHOLD_H = 15000
-
-UNLOCK_CURRENT_THRESHOLD_L = -18000
-UNLOCK_CURRENT_THRESHOLD_H = 18000
-
-ROTATE_CURRENT_THRESHOLD_L = -18000
-ROTATE_CURRENT_THRESHOLD_H = 18000
-
-OPEN_CURRENT_THRESHOLD_L = -25000
-OPEN_CURRENT_THRESHOLD_H = 25000
-
-PULL_DOOR_THRESHOLD_JOINT_4_L = -10000
-PUSH_DOOR_THRESHOLD_JOINT_4_H = 15000
-
-## Primitive Types
-# DUAL = 0 # [0/1,0,0] # 0 for right 1 for left
-
-HOME = 0 # [0,0,0]
-PREMOVE = 1 # [T,0,0]
-GRASP = 2 # [dx,dy,dz]
-UNLOCK = 3 # [T,0,0]
-ROTATE = 4 # [T,0,0]
-OPEN = 5 # [T,0,0]
-START = 6
-FINISH = 7
-BACK = 8
-CLEAR = 9
-
-## Error Types
-SUCCESS = 1
-
-SAFTY_ISSUE = 2131
-NO_SAFTY_ISSUE = 3121
-
-# PREMOVE_TOO_CLOSE = -1
-
-GRASP_NO_HANDLE = -1
-GRASP_IK_FAIL = -1
-GRASP_SAFTY = 0
-GRASP_MISS = -1
-
-ROTATE_MISS = -1
-ROTATE_SAFTY = 0
-ROTATE_IK_FAIL = -1
-
-UNLOCK_MISS = -1
-UNLOCK_SAFTY = 0
-UNLOCK_IK_FAIL = -1
-
-OPEN_MISS = -1
-OPEN_SAFTY = 0
-OPEN_FAIL = -1
 
 def time_it(func):
     def wrapper(*args, **kwargs):
@@ -99,22 +45,29 @@ def time_it(func):
 
 class Primitive(object):
     def __init__(self,root_dir='./',tjt_num=1,cfg_path='./cfg/cfg.yaml'):
+        ## get cfg
         cfg = read_yaml_file(f'{root_dir}/{cfg_path}', is_convert_dict_to_class=True)
         self.cfg = cfg
 
         ## init two arms
         self.arm_r = Arm.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_arm_right}')
         self.arm_l = Arm.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_arm_left}')
+        
         ## init camera
         self.camera = Camera.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_cam}')
+        
         ## init base
         self.base = Base.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_base}')
+        
         ## init head
         self.head = Head.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_head}')
+        
         ## init server
         self.server = Server.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_server}')
+        
         ## init ransac
         self.ransac = RANSAC(cfg_ransac=f'{root_dir}/{cfg.cfg_ransac}',cfg_cam=f'{root_dir}/{cfg.cfg_cam}')
+        
         ## init dtsam
         self.dtsam = DTSAM.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_dtsam}')
 
@@ -131,17 +84,51 @@ class Primitive(object):
         if os.path.exists(self.tjt_dir):
              shutil.rmtree(self.tjt_dir)
         os.makedirs(self.tjt_dir)
+        
+        ## current thresholds
+        self.grasp_thresholds = [[self.cfg.threshold.grasp.l,self.cfg.threshold.grasp.h] for _ in range(6)]
+        self.unlock_thresholds = [[self.cfg.threshold.unlock.l,self.cfg.threshold.unlock.h] for _ in range(6)]
+        self.unlock_stop_thresholds = [[self.cfg.threshold.unlock.stop_l,self.cfg.threshold.unlock.stop_h] for _ in range(6)]
+        self.rotate_thresholds = [[self.cfg.threshold.rotate.l,self.cfg.threshold.rotate.h] for _ in range(6)]
+        self.rotate_stop_thresholds = [[self.cfg.threshold.rotate.stop_l,self.cfg.threshold.rotate.stop_h] for _ in range(6)]
+        self.open_thresholds = [[self.cfg.threshold.open.l,self.cfg.threshold.open.h] for _ in range(6)]
 
-        self.last_pmt = _Primitive(action="START",id=START,ret=1,param=[0,0,0],error="START")
-        self.this_pmt = _Primitive(action="START",id=START,ret=1,param=[0,0,0],error="START")
+        ## Primitive Types
+        self.HOME = self.cfg.pmts.home
+        self.PREMOVE = self.cfg.pmts.premove
+        self.GRASP = self.cfg.pmts.grasp
+        self.UNLOCK = self.cfg.pmts.unlock
+        self.ROTATE = self.cfg.pmts.rotate
+        self.OPEN = self.cfg.pmts.open
+        self.START = self.cfg.pmts.start
+        self.FINISH = self.cfg.pmts.finish
+        self.BACK = self.cfg.pmts.back
+        self.CLEAR = self.cfg.pmts.clear
+        
+        ## Error Types
+        self.SUCCESS = self.cfg.errors.success
+        self.SAFETY_ISSUE = self.cfg.errors.current.safety_issue
+        self.EVENT_DETECTED = self.cfg.errors.current.event_detected
+        self.NO_ISSUE = self.cfg.errors.current.no_issue
+        self.GRASP_SAFETY = self.cfg.errors.grasp.grasp_safety
+        self.GRASP_NO_HANDLE = self.cfg.errors.grasp.grasp_no_handle
+        self.GRASP_IK_FAIL = self.cfg.errors.grasp.grasp_ik_fail
+        self.GRASP_MISS = self.cfg.errors.grasp.grasp_miss
+        self.ROTATE_SAFETY = self.cfg.errors.rotate.rotate_safety
+        self.ROTATE_MISS = self.cfg.errors.rotate.rotate_miss
+        self.ROTATE_IK_FAIL = self.cfg.errors.rotate.rotate_ik_fail
+        self.UNLOCK_SAFETY = self.cfg.errors.unlock.unlock_safety
+        self.UNLOCK_MISS = self.cfg.errors.unlock.unlock_miss
+        self.UNLOCK_IK_FAIL = self.cfg.errors.unlock.unlock_ik_fail
+        self.OPEN_SAFETY = self.cfg.errors.open.open_safety
+        self.OPEN_MISS = self.cfg.errors.open.open_miss
+        self.OPEN_FAIL = self.cfg.errors.open.open_fail
+
+        ## init 
+        self.last_pmt = _Primitive(action="START",id=self.START,ret=1,param=[0,0,0],error="START")
+        self.this_pmt = _Primitive(action="START",id=self.START,ret=1,param=[0,0,0],error="START")
         self.primitives = {0:self.last_pmt.to_list()}
-        
-        ## safty
-        self.grasp_thresholds = [[GRASP_CURRENT_THRESHOLD_L, GRASP_CURRENT_THRESHOLD_H] for _ in range(6)]
-        self.unlock_thresholds = [[UNLOCK_CURRENT_THRESHOLD_L, UNLOCK_CURRENT_THRESHOLD_H] for _ in range(6)]
-        self.rotate_thresholds = [[ROTATE_CURRENT_THRESHOLD_L, ROTATE_CURRENT_THRESHOLD_H] for _ in range(6)]
-        self.open_thresholds = [[OPEN_CURRENT_THRESHOLD_L, OPEN_CURRENT_THRESHOLD_H] for _ in range(6)]
-        
+
     def disconnect_robot(self):
         print('========== Disconnecting... ==========')
         self.camera.disconnect()
@@ -156,26 +143,24 @@ class Primitive(object):
         return ''
     
     def action2num(self,action):
-        if action == "dual":
-            return DUAL
-        elif action == "premove":
-            return PREMOVE
+        if action == "premove":
+            return self.PREMOVE
         elif action == "grasp":
-            return GRASP
+            return self.GRASP
         elif action == "unlock":
-            return UNLOCK
+            return self.UNLOCK
         elif action == "rotate":
-            return ROTATE
+            return self.ROTATE
         elif action == "open":
-            return OPEN
+            return self.OPEN
         elif action == "home":
-            return HOME
+            return self.HOME
         elif action == "finish":
-            return FINISH
+            return self.FINISH
         elif action == "back":
-            return BACK
+            return self.BACK
         elif action == "clear":
-            return CLEAR
+            return self.CLEAR
         else:
             return -1
 
@@ -223,8 +208,8 @@ class Primitive(object):
                 os.makedirs(os.path.dirname(self.d_img_path))
             rgb_img,d_img = self.camera.capture_rgbd(rgb_save_path=self.rgb_img_path,d_save_path=self.d_img_path)
             if vis:
-                vis_rgbd(d_img_path=self.d_img_path,rgb_img_path=self.rgb_img_path,save_path=f'{self.tjt_dir}/{self.action_num}/rgbd_vis.png')
-                vis_d(d_img_path=self.d_img_path,save_path=f'{self.tjt_dir}/{self.action_num}/d_vis.png')
+                vis_rgbd(d_img_path=self.d_img_path,rgb_img_path=self.rgb_img_path,save_path=f'{self.tjt_dir}/{self.action_num}/vis_rgbd.png')
+                vis_d(d_img_path=self.d_img_path,save_path=f'{self.tjt_dir}/{self.action_num}/vis_d.png')
             return rgb_img,d_img 
         else:
             if if_update:
@@ -234,39 +219,52 @@ class Primitive(object):
             return rgb_img
         # print(f'========== Image Captured ==========')
 
-    def start_current_monitor_thread(self,thresholds):
+    def start_current_monitor_thread(self,thresholds_safety,thresholds_event=None):
         self.current_data = {i: [] for i in range(7)}
         self.current_max = [0]*7
         self.current_min = [0]*7
         self.current_data_start_time = time.time()
         self.monitor_running = True
-        self.current_monitor_thread = threading.Thread(target=self.current_monitor_loop, args=(thresholds,))
+        self.current_monitor_thread = threading.Thread(target=self.current_monitor_loop, args=(thresholds_safety,thresholds_event))
         self.current_monitor_thread.daemon = True
         self.current_monitor_thread.start()
 
-    def current_monitor_loop(self,thresholds):
+    def current_monitor_loop(self,thresholds_safety,thresholds_event):
         while self.monitor_running:
-            current_check_result = self.check_current_safety(thresholds)
-            if current_check_result == 0:
-                print(f"!!!SAFTY ISSUE!!!")
-                self.this_pmt.ret = SAFTY_ISSUE
-                self.this_pmt.error = 'SAFTY_ISSUE'
+            current_check_result = self.check_current_safety(thresholds_safety,thresholds_event)
+            if current_check_result == -1:
+                print(f"!!! SAFETY ISSUE !!!")
+                self.this_pmt.ret = self.SAFETY_ISSUE
+                self.this_pmt.error = 'SAFETY_ISSUE'
                 self.arm.move_stop(if_p=True)
                 break
-            else:
-                self.this_pmt.ret = NO_SAFTY_ISSUE
-                self.this_pmt.error = 'NO_SAFTY_ISSUE'
+            elif current_check_result == 0:
+                print(f"!!! Event Detected !!!")
+                self.this_pmt.ret = self.EVENT_DETECTED
+                self.this_pmt.error = 'EVENT_DETECTED'
+                self.arm.move_stop(if_p=True)
+                break
+            elif current_check_result == 1:
+                self.this_pmt.ret = self.NO_ISSUE
+                self.this_pmt.error = 'NO_ISSUE'
             time.sleep(0.1)
 
-    def check_current_safety(self,thresholds):
+    def check_current_safety(self,thresholds_safety,thresholds_event):
         current = self.arm.get_c()
         for i in range(7):
             self.current_data[i].append(current[i])
             self.current_max[i] = max(self.current_max[i],current[i])
             self.current_min[i] = min(self.current_min[i],current[i])
-        for i, (min_current, max_current) in enumerate(thresholds):
+        # safety issue
+        for i, (min_current, max_current) in enumerate(thresholds_safety):
             if current[i] < min_current or current[i] > max_current:
-                return 0
+                return -1
+        # event detected
+        if thresholds_event:
+            for i, (min_current, max_current) in enumerate(thresholds_event):
+                if current[i] < min_current or current[i] > max_current:
+                    return 0
+        # no issue
         return 1
 
     def vis_current_data(self,save_path=None,show=False):
@@ -290,7 +288,7 @@ class Primitive(object):
     def premove(self):
         print(f'========== Premoving ... ==========')
         self.this_pmt.action = "PREMOVE"
-        self.this_pmt.id = PREMOVE
+        self.this_pmt.id = self.PREMOVE
         self.this_pmt.param = [0,0,0]
 
         rgb_img_path = f'{self.tjt_dir}/{self.action_num}/rgb.png'
@@ -302,10 +300,10 @@ class Primitive(object):
         self.normal,self.weights,self._3d_center,self._2d_center,self.mask_color = self.ransac.get_normal_server(rgb_img_path,d_img_path,self.server,self.remote_python_path,self.remote_root_dir,self.remote_img_dir)
         print(f'[RANSAC Result] normal: {self.normal} weights: {self.weights}')
 
-        self.base.move_to_door(self.weights,offset_in_front=0.7,d2t_coefficient=4.8) # 4.8 for 1311LabDoor # 4.6 for 0311LabInsideDoor2
+        self.base.move_to_door(self.weights,self.cfg.premove.offset_in_front,self.cfg.premove.d2t_coefficient)
         time.sleep(2)
 
-        self.this_pmt.ret = SUCCESS
+        self.this_pmt.ret = self.SUCCESS
         self.this_pmt.error = "NONE"
 
         self.update()
@@ -314,14 +312,15 @@ class Primitive(object):
         return self.this_pmt.ret,self.this_pmt.error
     
     @time_it
-    def grasp(self,grasp_param,thresholds=None):
+    def grasp(self,grasp_param):
         print('========== Grasping... ==========')
         
         self.this_pmt.action = "GRASP"
-        self.this_pmt.id = GRASP
+        self.this_pmt.id = self.GRASP
         self.this_pmt.param = grasp_param
         self.dx,self.dy,self.R = grasp_param
 
+        ## os
         rgb_img_path = f'{self.tjt_dir}/{self.action_num}/rgb.png'
         if not os.path.exists(os.path.dirname(rgb_img_path)):
             os.makedirs(os.path.dirname(rgb_img_path))
@@ -332,7 +331,7 @@ class Primitive(object):
         print('DTSAM ...')
         self.x1_2d,self.y1_2d,self.orientation,self.w,self.h,self.box = self.dtsam.get_xy_server(rgb_img_path,self.server,self.remote_python_path,self.remote_root_dir,self.remote_img_dir)
         if self.w == 0 and self.h == 0:
-            self.this_pmt.ret = GRASP_NO_HANDLE
+            self.this_pmt.ret = self.GRASP_NO_HANDLE
             self.this_pmt.error = "GRASP_NO_HANDLE"
             print(f'[DTSAM Result] NO handle detections!!!')
         else:
@@ -389,47 +388,44 @@ class Primitive(object):
             print(f'[p2_3d_base_xyzrxryrz] {self.p2_3d_base_xyzrxryrz}')
             
             ## offset(depth and rotation)
-            self.p1_3d_base_xyzrxryrz[0] += 0.0
-            self.p2_3d_base_xyzrxryrz[0] += 0.0
+            self.p1_3d_base_xyzrxryrz[0] += self.cfg.grasp.p1_z_offset
+            self.p2_3d_base_xyzrxryrz[0] += self.cfg.grasp.p2_z_offset
             self.p1_3d_base_xyzrxryrz[4] += np.pi/6
             self.p2_3d_base_xyzrxryrz[4] += np.pi/6
             print(f'[p1_3d_base_xyzrxryrz] {self.p1_3d_base_xyzrxryrz}')
             print(f'[p2_3d_base_xyzrxryrz] {self.p2_3d_base_xyzrxryrz}')
 
-            ## SAFTY detection BEGIN
-            if thresholds is None:
-                thresholds = self.grasp_thresholds
-            self.start_current_monitor_thread(thresholds=thresholds)
+            ## Current Detection Begin
+            self.start_current_monitor_thread(thresholds_safety=self.grasp_thresholds)
 
             ## move to handle(DMP)
             print(f'Moving ...')
-            tag = self.arm.move_p_dmp(pos=self.p1_3d_base_xyzrxryrz,vel=10,save_dir=f'{self.tjt_dir}/{self.action_num}/dmp/')
+            tag = self.arm.move_p_dmp(pos=self.p1_3d_base_xyzrxryrz,save_dir=f'{self.tjt_dir}/{self.action_num}/dmp/',if_p=True)
 
             ## close gripper
             print(f'Closing Gripper ...')
             if not tag:
-                self.arm.control_gripper(open_value=50)
+                self.arm.control_gripper(self.cfg.grasp.gripper_value)
                 time.sleep(2)
 
-            ## SAFTY detection END
+            ## Current Detection End (1.[safety issue] or 2.[event detected] or 3.[code runs to this line])
             self.monitor_running = False
             self.current_monitor_thread.join()
             self.vis_current_data()
-
-            print(f'self.current_min[4-1]: {self.current_min[4-1]}')
             
-            if self.this_pmt.ret == SAFTY_ISSUE or self.current_min[4-1] < -2000:
-                self.this_pmt.ret = GRASP_SAFTY
-                self.this_pmt.error = "GRASP_SAFTY"
-            elif self.this_pmt.ret == NO_SAFTY_ISSUE:
+            ## update
+            if self.this_pmt.ret == self.SAFETY_ISSUE:
+                self.this_pmt.ret = self.GRASP_SAFETY
+                self.this_pmt.error = "GRASP_SAFETY"
+            elif self.this_pmt.ret == self.NO_ISSUE or self.this_pmt.ret == self.EVENT_DETECTED:
                 if tag:
-                    self.this_pmt.ret = GRASP_IK_FAIL
+                    self.this_pmt.ret = self.GRASP_IK_FAIL
                     self.this_pmt.error = "GRASP_IK_FAIL"
                 elif self.arm.get_gripper_grasp_return(if_p=True) != 2:
-                    self.this_pmt.ret = GRASP_MISS
+                    self.this_pmt.ret = self.GRASP_MISS
                     self.this_pmt.error = "GRASP_MISS"
                 else:
-                    self.this_pmt.ret = SUCCESS
+                    self.this_pmt.ret = self.SUCCESS
                     self.this_pmt.error = "NONE"
         
         self.update()
@@ -438,28 +434,27 @@ class Primitive(object):
         return self.this_pmt.ret,self.this_pmt.error
     
     @time_it
-    def unlock(self,thresholds=None):
+    def unlock(self):
         print(f'========== Unlocking ... ==========')
         
         self.this_pmt.action = "UNLOCK"
-        self.this_pmt.id = UNLOCK
+        self.this_pmt.id = self.UNLOCK
         self.this_pmt.param = [0,0,0]
 
-        if thresholds is None:
-            thresholds = self.unlock_thresholds
-        self.start_current_monitor_thread(thresholds=thresholds)
-
+        ## Current Detection Begin
+        self.start_current_monitor_thread(thresholds_safety=self.unlock_thresholds,thresholds_event=self.unlock_stop_thresholds)
+        
         ## close gripper
         print(f'Closing Gripper ...')
-        self.arm.control_gripper(open_value=300)
+        self.arm.control_gripper(self.cfg.unlock.gripper_value_before)
         time.sleep(2)
 
         ## unlock
         print(f'Unlocking ...')
-        tag = self.arm.move_p(pos=self.p2_3d_base_xyzrxryrz,vel=10)
+        tag = self.arm.move_p(pos=self.p2_3d_base_xyzrxryrz,if_p=True)
         time.sleep(1)
         
-        ## SAFTY detection
+        ## Current Detection End (1.[safety issue] or 2.[event detected] or 3.[code runs to this line])
         self.monitor_running = False
         self.current_monitor_thread.join()
         self.vis_current_data()
@@ -467,22 +462,23 @@ class Primitive(object):
         ## close gripper
         print(f'Closing Gripper ...')
         if not tag:
-            self.arm.control_gripper(open_value=50)
-            time.sleep(3)
+            self.arm.control_gripper(self.cfg.unlock.gripper_value_after)
+            time.sleep(2)
         
-        if self.this_pmt.ret == NO_SAFTY_ISSUE:
+        ## update
+        if self.this_pmt.ret == self.NO_ISSUE:
             if tag:
-                self.this_pmt.ret = UNLOCK_IK_FAIL
+                self.this_pmt.ret = self.UNLOCK_IK_FAIL
                 self.this_pmt.error = "UNLOCK_IK_FAIL"
             elif self.arm.get_gripper_grasp_return(if_p=True) != 2:
-                self.this_pmt.ret = UNLOCK_MISS
+                self.this_pmt.ret = self.UNLOCK_MISS
                 self.this_pmt.error = "UNLOCK_MISS"
             else:
-                self.this_pmt.ret = SUCCESS
+                self.this_pmt.ret = self.SUCCESS
                 self.this_pmt.error = "NONE"
-        elif self.this_pmt.ret == SAFTY_ISSUE:
-            self.this_pmt.ret = UNLOCK_SAFTY
-            self.this_pmt.error = "UNLOCK_SAFTY"
+        elif self.this_pmt.ret == self.SAFETY_ISSUE:
+            self.this_pmt.ret = self.UNLOCK_SAFETY
+            self.this_pmt.error = "UNLOCK_SAFETY"
 
         self.update()
         print(f'[Primitive INFO] ret: {self.this_pmt.ret}, error: {self.this_pmt.error}')
@@ -490,45 +486,45 @@ class Primitive(object):
         return self.this_pmt.ret,self.this_pmt.error
 
     @time_it
-    def rotate(self,thresholds=None):
+    def rotate(self):
         print(f'========== Rotating ... ==========')
         
         self.this_pmt.action = "ROTATE"
-        self.this_pmt.id = ROTATE
+        self.this_pmt.id = self.ROTATE
         self.this_pmt.param = [0,0,0]
 
-        if thresholds is None:
-            thresholds = self.rotate_thresholds
-        self.start_current_monitor_thread(thresholds=thresholds)
+        ## Current Detection Begin
+        self.start_current_monitor_thread(thresholds_safety=self.rotate_thresholds,thresholds_event=self.rotate_stop_thresholds)
 
         ## close gripper
         print(f'Closing Gripper ...')
-        self.arm.control_gripper(open_value=50)
+        self.arm.control_gripper(self.cfg.rotate.gripper_value)
         time.sleep(2)
 
         ## rotate
         print(f'Rotating ...')
-        # tag = self.arm.rotate_handle_move_j(T=rotate_T, execute_v=10,if_p=True)
-        # time.sleep(1)
+        tag = self.arm.move_j(self.arm.get_j()-180)
+        time.sleep(2)
 
-        ## SAFTY detection
+        ## Current Detection End (1.[safety issue] or 2.[event detected] or 3.[code runs to this line])
         self.monitor_running = False
         self.current_monitor_thread.join()
         self.vis_current_data()
 
-        if self.this_pmt.ret == NO_SAFTY_ISSUE:
+        ## update
+        if self.this_pmt.ret == self.NO_ISSUE:
             if tag != 0:
-                self.this_pmt.ret = ROTATE_IK_FAIL
+                self.this_pmt.ret = self.ROTATE_IK_FAIL
                 self.this_pmt.error = "ROTATE_IK_FAIL"
             elif self.arm.get_gripper_grasp_return(if_p=True) != 2:
-                self.this_pmt.ret = ROTATE_MISS
+                self.this_pmt.ret = self.ROTATE_MISS
                 self.this_pmt.error = "ROTATE_MISS"
             else:
-                self.this_pmt.ret = SUCCESS
+                self.this_pmt.ret = self.SUCCESS
                 self.this_pmt.error = "NONE"
-        elif self.this_pmt.ret == SAFTY_ISSUE:
-            self.this_pmt.ret = ROTATE_SAFTY
-            self.this_pmt.error = "ROTATE_SAFTY"
+        elif self.this_pmt.ret == self.SAFETY_ISSUE:
+            self.this_pmt.ret = self.ROTATE_SAFETY
+            self.this_pmt.error = "ROTATE_SAFETY"
 
         self.update()
         print(f'[Primitive INFO] ret: {self.this_pmt.ret}, error: {self.this_pmt.error}')
@@ -536,46 +532,46 @@ class Primitive(object):
         return self.this_pmt.ret,self.this_pmt.error
     
     @time_it
-    def open(self,thresholds=None):
+    def open(self):
         print(f'========== Opening ... ==========')
         
         self.this_pmt.action = "OPEN"
-        self.this_pmt.id = OPEN
+        self.this_pmt.id = self.OPEN
         self.this_pmt.param = [0,0,0]
 
-        if thresholds is None:
-            thresholds = self.open_thresholds
-        self.start_current_monitor_thread(thresholds=thresholds)
+        ## Current Detection Begin
+        self.start_current_monitor_thread(thresholds_safety=self.open_thresholds)
 
+        ## close gripper
         print(f'Close Gripper ...')
-        self.arm.control_gripper(open_value=50)
-        time.sleep(1.5)
+        self.arm.control_gripper(self.cfg.open.gripper_value)
+        time.sleep(2)
+        
+        ## open
         print(f'opening ...')
-        linear_T = 2.0
-        angular_T = 0.5
-        self.base.move_open_door(linear_T,angular_T)
-        time.sleep(abs(linear_T)+abs(angular_T)+1)
+        self.base.move_open_door(self.cfg.open.linear_T,self.cfg.open.angular_T)
+        time.sleep(3)
 
-        ## SAFTY detection
+        ## Current Detection End (1.[safety issue] or 2.[event detected] or 3.[code runs to this line])
         self.monitor_running = False
         self.current_monitor_thread.join()
         self.vis_current_data()
         
-        if self.this_pmt.ret == NO_SAFTY_ISSUE:
-            if self.current_min[4-1] < PULL_DOOR_THRESHOLD_JOINT_4_L or self.current_max[4-1] > PUSH_DOOR_THRESHOLD_JOINT_4_H:
-            # if distance < 0.5:
-                self.this_pmt.ret = OPEN_FAIL
+        ## update
+        if self.this_pmt.ret == self.NO_ISSUE:
+            if self.current_min[3] < self.cfg.threshold.open.pull_j3_l or self.current_max[3] > self.cfg.threshold.open.push_j3_h:
+                self.this_pmt.ret = self.OPEN_FAIL
                 self.this_pmt.error = "OPEN_FAIL"
-                print(f'curent_min_joint_4: {self.current_min[4-1]} curent_max_joint_4: {self.current_max[4-1]}')
+                print(f'[Current Info] curent_min_joint_3: {self.current_min[3]} curent_max_joint_3: {self.current_max[3]}')
             elif self.arm.get_gripper_grasp_return(if_p=True) != 2:
-                self.this_pmt.ret = OPEN_MISS
+                self.this_pmt.ret = self.OPEN_MISS
                 self.this_pmt.error = "OPEN_MISS"
             else:
-                self.this_pmt.ret = SUCCESS
+                self.this_pmt.ret = self.SUCCESS
                 self.this_pmt.error = "NONE"
-        elif self.this_pmt.ret == SAFTY_ISSUE:
-            self.this_pmt.ret = OPEN_SAFTY
-            self.this_pmt.error = "OPEN_SAFTY"
+        elif self.this_pmt.ret == self.SAFETY_ISSUE:
+            self.this_pmt.ret = self.OPEN_SAFETY
+            self.this_pmt.error = "OPEN_SAFETY"
 
         self.update()
         print(f'[Primitive INFO] ret: {self.this_pmt.ret}, error: {self.this_pmt.error}')
@@ -586,16 +582,18 @@ class Primitive(object):
     def home(self):
         print(f'========== Going Home ... ==========')
 
-        self.arm.control_gripper(open_value=1000)
+        self.arm.control_gripper(self.cfg.home.gripper_value)
         time.sleep(2)
-        self.base.move_T(-0.5)
+        self.base.move_T(-self.cfg.home.move_T)
         time.sleep(1)
         self.arm.go_home()
         self.base.move_location([self.start_x,self.start_y,self.start_theta])
-        self.base.move_T(0.5)
-        
+        time.sleep(1)
+        self.base.move_T(self.cfg.home.move_T)
+        time.sleep(1)
+
         self.this_pmt.action = "HOME"
-        self.this_pmt.id = HOME
+        self.this_pmt.id = self.HOME
         self.this_pmt.ret = 1
         self.this_pmt.param = [0,0,0]
         self.this_pmt.error = "None"
@@ -608,15 +606,15 @@ class Primitive(object):
 
     @time_it
     def back(self):
-        ## just for debug
+        ## back to grasping state
         print(f'========== Backing to p1_3d_base_xyzrxryrz ... ==========')
         
-        self.arm.control_gripper(open_value=1000)
+        self.arm.control_gripper(self.cfg.back.gripper_value)
         time.sleep(2)
-        tag2 = self.arm.move_p(pos=self.p1_3d_base_xyzrxryrz,vel=20,if_p=True)
+        tag = self.arm.move_p(pos=self.p1_3d_base_xyzrxryrz,if_p=True)
 
         self.this_pmt.action = "BACK"
-        self.this_pmt.id = BACK
+        self.this_pmt.id = self.BACK
         self.this_pmt.ret = 1
         self.this_pmt.param = [0,0,0]
         self.this_pmt.error = "BACK"
@@ -630,16 +628,18 @@ class Primitive(object):
     def finish(self):
         print(f'========== Finishing ... ==========')
 
-        self.arm.control_gripper(open_value=1000)
+        self.arm.control_gripper(self.cfg.finish.gripper_value)
         time.sleep(2)
-        self.base.move_T(-0.5)
+        self.base.move_T(-self.cfg.finish.move_T)
         time.sleep(1)
-        self.arm.go_home()
-        self.base.move_location([self.base.start_x,self.base.start_y,self.base.start_theta])
-        self.base.move_T(0.5)
+        self.arm.go_finish()
+        self.base.move_location([self.start_x,self.start_y,self.start_theta])
+        time.sleep(1)
+        self.base.move_T(self.cfg.finish.move_T)
+        time.sleep(1)
         
         self.this_pmt.action = "FINISH"
-        self.this_pmt.id = FINISH
+        self.this_pmt.id = self.FINISH
         self.this_pmt.ret = 1
         self.this_pmt.param = [0,0,0]
         self.this_pmt.error = "FINISH"
@@ -656,7 +656,7 @@ class Primitive(object):
 
         self.action_num = 0
 
-        self.last_pmt = _Primitive(action="START",id=START,ret=1,param=[0,0,0],error="START")
+        self.last_pmt = _Primitive(action="START",id=self.START,ret=1,param=[0,0,0],error="START")
         self.this_pmt = _Primitive()
 
         self.primitives = {0:self.last_pmt.to_list()}
@@ -680,29 +680,29 @@ class Primitive(object):
         ## capture
         if primitive_type == -1:
             raise ValueError("Input error: Invalid primitive type value")
-        elif primitive_type == GRASP or primitive_type == PREMOVE:
+        elif primitive_type == self.GRASP or primitive_type == self.PREMOVE:
             self.capture(if_d=True,vis=True,if_update=True)
         else:
             self.capture(if_d=False,vis=False,if_update=True)
         
         ## do action
-        if primitive_type == PREMOVE:
+        if primitive_type == self.PREMOVE:
             ret,error = self.premove()
-        elif primitive_type == GRASP:
+        elif primitive_type == self.GRASP:
             ret,error = self.grasp(grasp_param=_param[:3])
-        elif primitive_type == ROTATE:
+        elif primitive_type == self.ROTATE:
             ret,error = self.rotate()
-        elif primitive_type == UNLOCK:
+        elif primitive_type == self.UNLOCK:
             ret,error = self.unlock()
-        elif primitive_type == OPEN:
+        elif primitive_type == self.OPEN:
             ret,error = self.open(open_T=_param[0])
-        elif primitive_type == HOME:
+        elif primitive_type == self.HOME:
             ret,error = self.home()
-        elif primitive_type == FINISH:
+        elif primitive_type == self.FINISH:
             ret,error = self.finish()
-        elif primitive_type == BACK:
+        elif primitive_type == self.BACK:
             ret,error = self.back()
-        elif primitive_type == CLEAR:
+        elif primitive_type == self.CLEAR:
             ret,error = self.clear()
 
         self.capture(if_d=False,vis=False,if_update=False)
@@ -731,12 +731,25 @@ class Primitive(object):
                 print("Please re-input!")
             print('***************************************************************\n\n')
 
-    def data_collection2(self):
-        ret, error = self.do_primitive('premove', [1])
+    def open_loop(self):
+        ret, error = self.do_primitive('premove')
         ret, error = self.do_primitive('grasp', [0,0,0])
-        ret, error = self.do_primitive('open', [-3])
+        ret, error = self.do_primitive('unlock')
+        ret, error = self.do_primitive('open')
+    
+    def hl_LLM(self):
+        pass
+
+    def hl_MLLM(self):
+        pass
+
+    def hl_MLP(self):
+        pass
+
+    def hl_SM(self):
+        pass
         
-    def state_machine(self):
+    def close_loop_state_machine(self):
         state = 1
         while True:
             if state == 1:
@@ -752,7 +765,7 @@ class Primitive(object):
                         state = 1
                     elif error == 'GRASP_MISS':
                         state = 2
-                    elif error == 'GRASP_SAFTY ':
+                    elif error == 'GRASP_SAFETY ':
                         state = 2
                 else:
                     state = 3
@@ -763,7 +776,7 @@ class Primitive(object):
                         state = 3
                     elif error == 'UNLOCK_MISS':
                         state = 3
-                    elif error == 'UNLOCK_SAFTY':
+                    elif error == 'UNLOCK_SAFETY':
                         state = 3
                 else:
                     state = 4
@@ -776,7 +789,7 @@ class Primitive(object):
 
                     elif error == 'OPEN_MISS':
                         state = 4
-                    elif error == 'OPEN_SAFTY':
+                    elif error == 'OPEN_SAFETY':
                         state = 4
                 else:
                     state = 5
