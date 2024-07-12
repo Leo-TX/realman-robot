@@ -151,7 +151,18 @@ def test4():
     rpy = R_to_EulerAngle(R,rad=True)
     print(rpy)
 
-def main():
+def test5():
+    # target2cam_rpy = [0.32611863105745464, -0.09393242756730547, -0.03171004262462371]
+    target2cam_rpy = [0.3624729993914516,-0.0035345173383167783, -0.001340387386237124]
+    target2base_rpy = [-1.0709999799728394, 0.4970000088214874, -3.072000026702881]
+
+    target2cam_R = EulerAngle_to_R(target2cam_rpy,rad=True)
+    target2base_R = EulerAngle_to_R(target2base_rpy,rad=True)
+
+    cam2base_R = np.linalg.inv(target2cam_R) @ target2base_R
+    print(f'cam2base_R:\n{cam2base_R}')
+
+def test6():
     xyzrpy = np.array([0.1,0.2,0.3,170,120,60])
     R = EulerAngle_to_R(xyzrpy[3:6])
     t = xyz_to_t(xyzrpy[0:3])
@@ -168,5 +179,6 @@ def main():
     xyz = t_to_xyz(t)
     xyzrpy = xyz_rpy_to_xyzrpy(xyz,rpy)
 
+
 if __name__ == '__main__':
-    test4()
+    test5()

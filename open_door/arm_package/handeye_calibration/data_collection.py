@@ -56,6 +56,6 @@ if __name__ == '__main__':
     if not os.path.exists(data_folder):
         os.makedirs(data_folder)
 
-    arm = Arm.init_from_yaml(cfg_path='../../cfg/cfg_arm_left.yaml')
+    arm = Arm.init_from_yaml(root_dir='../../',cfg_path='cfg/cfg_arm_left.yaml')
 
     data_collection(arm,data_folder)

@@ -41,7 +41,7 @@ def add_point_to_image(img, x, y, dot_size=1, dot_color=(255, 0, 0),save_path=No
     if save_path:
         image.save(save_path)
 
-def vis_grasp(img_path, x1, y1, x2, y2, Ox, Oy, R, orientation='horizontal', angle=90, save_path=None, show=False):
+def vis_grasp(img_path, dx, dy, x1, y1, x2, y2, Ox, Oy, R, orientation='horizontal', angle=90, save_path=None, show=False):
     # pattern
     dot_size=5
     dot_color=(255, 0, 0) # red
@@ -57,6 +57,7 @@ def vis_grasp(img_path, x1, y1, x2, y2, Ox, Oy, R, orientation='horizontal', ang
     draw = ImageDraw.Draw(image)
 
     # Add points
+    add_point_to_image(image, x1-dx, y1-dy, dot_size, dot_color)
     add_point_to_image(image, x1, y1, dot_size, dot_color)
     add_point_to_image(image, x2, y2, dot_size, dot_color)
     add_point_to_image(image, Ox, Oy, dot_size, dot_color)

@@ -10,11 +10,11 @@
     "last_error": "START",
     "this_action": "GRASP",
     "this_id": 2,
-    "this_ret": 0,
+    "this_ret": -1,
     "this_param": [
         0.0,
-        0.0,
-        -100.0
+        10.0,
+        -120.0
     ],
-    "this_error": "GRASP_SAFETY"
+    "this_error": "GRASP_MISS"
 }

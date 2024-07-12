@@ -75,6 +75,16 @@ class Base(object):
         self.client_socket.send(command.encode('utf-8'))
         response = self.client_socket.recv(1024).decode()
         # print("response:", response)
+    
+    def move(self,linear_velocity=None,angular_velocity=None):
+        if not linear_velocity:
+            linear_velocity = self.linear_velocity
+        if not angular_velocity:
+            angular_velocity = self.angular_velocity
+        command = f"/api/joy_control?angular_velocity={angular_velocity}&linear_velocity{linear_velocity}"
+        self.client_socket.send(command.encode('utf-8'))
+        response = self.client_socket.recv(1024).decode()
+        # print("response:", response)
 
     def move_stop(self):
         command = f"/api/estop"
@@ -113,32 +123,46 @@ class Base(object):
                 self.move_stop()
                 break
 
-    def move_open_door(self,linear_T,angular_T,linear_vel=None,angular_vel=None,if_p=False):
-        if not linear_vel:
-            linear_vel = self.linear_velocity
-        if not angular_vel:
-            angular_vel = self.angular_velocity
+    def move_open_door(self,T,linear_velocity=None,angular_velocity=None,if_p=False):
+        start_time = time.time()
+        num = 0
+        if not linear_velocity:
+            linear_velocity = self.linear_velocity
+        if not angular_velocity:
+            angular_velocity = self.angular_velocity
         while True:
-            if linear_T<=0:
+            if linear_velocity<=0:
                 self.move_char(char='s')
+                time.sleep(0.01)
+                self.move_char(char='s')
+                time.sleep(0.01)
+                self.move_char(char='s')
+                time.sleep(0.01)
             else:
                 self.move_char(char='w')
-            if angular_T<=0:
+                time.sleep(0.01)
+                self.move_char(char='w')
+                time.sleep(0.01)
+                self.move_char(char='w')
+                time.sleep(0.01)
+            if angular_velocity<=0:
                 self.move_char(char='a')
             else:
                 self.move_char(char='d')
-            num+=1
+
+            # self.move(linear_velocity,angular_velocity)
+
             time.sleep(0.01)
+            num+=1
             if if_p:
                 print(f'[Time]: {time.time() - start_time}')
             if time.time() - start_time > abs(T):
                 self.move_stop()
                 break
         
-    
-    def move_to_door(self,door_plane_weights,point=[0,0,0],offset_in_front=0.6,d2t_coefficient=4.8):
+    def move_to_door(self,door_plane_weights,offset_in_front=0.6,d2t_coefficient=4.8):
         D,A,B,C = door_plane_weights
-        x,y,z = point
+        x,y,z = [0,0,0]
         distance = abs(A * x + B * y + C * z + D) / np.sqrt(A**2 + B**2 + C**2)
         T = (distance-offset_in_front)*d2t_coefficient
         print(f"distance: {distance}")
@@ -240,7 +264,10 @@ if __name__ == "__main__":
     print(base)
 
     ## move keyboard
-    base.move_keyboard(interval=0.1)
+    # base.move_keyboard(interval=0.1)
+
+    ## open door
+    base.move_open_door(T=5,linear_velocity=-0.8,angular_velocity=0.6,if_p=False)
 
     ## disconnct
     # base.disconnect()

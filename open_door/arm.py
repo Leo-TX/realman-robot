@@ -16,7 +16,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 
-from utils.math import *
+from utils.lib_math import *
 from utils.lib_io import *
 
 from arm_package.robotic_arm import Arm as ArmBase
@@ -62,9 +62,9 @@ class Arm():
         self.home()
     
     @classmethod
-    def init_from_yaml(cls,cfg_path='cfg/cfg_arm_right.yaml'):
-        cfg = read_yaml_file(cfg_path, is_convert_dict_to_class=True)
-        return cls(cfg.root_dir,cfg.host_ip,cfg.host_port,cfg.cam2base_H_path,cfg.tool_frame,cfg.home_state,cfg.arm_vel,cfg.dmp_refer_tjt_path,cfg.if_gripper,cfg.gripper_force,cfg.gripper_start_pos,cfg.gripper_vel)
+    def init_from_yaml(cls,root_dir='./',cfg_path='cfg/cfg_arm_right.yaml'):
+        cfg = read_yaml_file(f'{root_dir}/{cfg_path}', is_convert_dict_to_class=True)
+        return cls(root_dir,cfg.host_ip,cfg.host_port,cfg.cam2base_H_path,cfg.tool_frame,cfg.home_state,cfg.arm_vel,cfg.dmp_refer_tjt_path,cfg.if_gripper,cfg.gripper_force,cfg.gripper_start_pos,cfg.gripper_vel)
 
     def __str__(self):
         # self.get_j()
@@ -181,7 +181,7 @@ class Arm():
         else:
             self.new_tjt = self.dmp.gen_new_tjt(initial_pos=self.get_p(),goal_pos=pos,if_save=False)
         # start moving
-        for num in range(90,100):
+        for num in range(90,100,2):
             self.middle_pose = self.dmp.get_middle_pose(tjt=self.new_tjt,num=num)
             tag1 = self.move_p(pos=self.middle_pose,vel=vel,if_p=if_p)
             if tag1 == 0:
@@ -380,12 +380,12 @@ class Arm():
 
 if __name__ =="__main__":
     ## connect
-    # arm_r = Arm.init_from_yaml(cfg_path='cfg/cfg_arm_right.yaml')
+    arm_r = Arm.init_from_yaml(cfg_path='cfg/cfg_arm_right.yaml')
     # print(arm_r)
-    arm_l = Arm.init_from_yaml(cfg_path='cfg/cfg_arm_left.yaml')
+    # arm_l = Arm.init_from_yaml(cfg_path='cfg/cfg_arm_left.yaml')
     # print(arm_l)
 
-    arm = arm_l
+    arm = arm_r
 
     ## get info
     arm.get_j(if_p=True)
@@ -395,13 +395,24 @@ if __name__ =="__main__":
     ## go home   
     # arm.go_home()
 
+    
     ## move
+    arm.move_p(pos= [0.5041879440137199, -0.363930156135148, -0.12988967238647242, -1.542752633571267, -1.0287198876671146, -1.8164599549929437],vel=10,if_p=True)
+
     # arm.move_p(pos=[0.12317908357308621, -0.5464211211674885, 0.44482142917458123, -0.07637366085514001, 0.0785014252930375, -1.787004206391503],vel=10,if_p=True)
-    arm.move_p(pos=[0.12317908357308621, -0.5464211211674885, 0.44482142917458123, -1.0709999799728394, 0.4970000088214874, -3.072000026702881],vel=10,if_p=True)
+    # arm.move_p(pos=[0.12317908357308621, -0.5464211211674885, 0.44482142917458123, -1.0709999799728394, 0.4970000088214874, -3.072000026702881],vel=10,if_p=True)
     # arm.move_p(pos=[0.0728359967470169, -0.5675070285797119, 0.4437209963798523, -1.0709999799728394, 0.4970000088214874, -3.072000026702881],vel=10,if_p=True)
     
+    # arm.move_p(pos=[0.07434247685784698, -0.6526907973574078, 0.4168234016423957, -0.005535468607542593, 0.18937013856407925, -1.7835836553503592] 
+    # arm.move_p(pos=[0.07434247685784698, -0.6526907973574078, 0.4168234016423957, -1.0709999799728394, 0.4970000088214874, -3.072000026702881] ,vel=10,if_p=True)
+
+    # arm.move_p(pos=[0.09654949010601238, -0.5336554146605064, 0.5114805428897862, -0.018546463292212424, 0.023764351915849136, -1.7803843195447542]  
+
+    # arm.move_p(pos=[0.03747233908179412, -0.41034849898452086, 0.5439071789024461, -0.04536105386184862, 1.0109927216986723, -1.7719200748750281]
+    # arm.move_p(pos=[0.041960966956122475, -0.5222132609241025, 0.4060754711144141, -0.3719297697769919, 0.347108517477288, -2.9146112461757334] ,vel=10,if_p=True)
+    # arm.move_p(pos=[0.0073200602470754605, -0.5322752861861719, 0.5107848596589202, -0.29350073558759887, 0.3820135059731921, -2.872116257978431]
     ## gripper control
-    # arm.control_gripper(open_value=1000)
+    # arm.control_gripper(open_value=0)
 
     ## tool frame
     # arm.manual_set_tool_frame(tool_name='dh3',pose=[0,0,0.148,0,0,0],if_p=True)

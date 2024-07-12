@@ -28,7 +28,7 @@ from ransac import RANSAC
 from dmp import DMP
 from _primitive import _Primitive
 
-from utils.math import *
+from utils.lib_math import *
 from utils.lib_io import *
 from utils.lib_rgbd import *
 
@@ -346,7 +346,7 @@ class Primitive(object):
             print(f'[center] Ox: {self.Ox}, Oy: {self.Oy}')
             
             ## vis
-            vis_grasp(rgb_img_path,self.x1_2d,self.y1_2d,self.x2_2d,self.y2_2d,self.Ox,self.Oy,self.R,self.orientation,angle=90,save_path=rgb_img_path.replace('rgb','vis_grasp'),show=False)
+            vis_grasp(rgb_img_path,self.dx,self.dy,self.x1_2d,self.y1_2d,self.x2_2d,self.y2_2d,self.Ox,self.Oy,self.R,self.orientation,angle=90,save_path=rgb_img_path.replace('rgb','vis_grasp'),show=False)
 
             ## determin which arm
             if self.x1_2d < self.camera.width / 2:
@@ -378,20 +378,23 @@ class Primitive(object):
             self.p2_3d_cam_xyzrxryrz = [self.x2_3d,self.y2_3d,self.z2_3d,self.rx,self.ry,self.rz]
             self.p1_3d_base_xyzrxryrz = self.arm.target2cam_xyzrpy_to_target2base_xyzrpy(self.p1_3d_cam_xyzrxryrz)
             self.p2_3d_base_xyzrxryrz = self.arm.target2cam_xyzrpy_to_target2base_xyzrpy(self.p2_3d_cam_xyzrxryrz)
-            if self.orientation == 'horizontal':
-                self.p1_3d_base_xyzrxryrz[4] -= np.pi/2
-                if self.R > 0:
-                    self.p2_3d_base_xyzrxryrz[4] -= np.pi
-                else:
-                    self.p2_3d_base_xyzrxryrz[4] += 0
+            
             print(f'[p1_3d_base_xyzrxryrz] {self.p1_3d_base_xyzrxryrz}')
             print(f'[p2_3d_base_xyzrxryrz] {self.p2_3d_base_xyzrxryrz}')
             
             ## offset(depth and rotation)
-            self.p1_3d_base_xyzrxryrz[0] += self.cfg.grasp.p1_z_offset
-            self.p2_3d_base_xyzrxryrz[0] += self.cfg.grasp.p2_z_offset
-            self.p1_3d_base_xyzrxryrz[4] += np.pi/6
-            self.p2_3d_base_xyzrxryrz[4] += np.pi/6
+            self.p1_3d_base_xyzrxryrz[0] += self.cfg.grasp.p1_x_offset
+            self.p2_3d_base_xyzrxryrz[0] += self.cfg.grasp.p2_x_offset
+            if self.r_l == 'right':
+                if self.orientation == 'horizontal':
+                    self.p1_3d_base_xyzrxryrz[4] -= np.pi/2
+                if self.R > 0:
+                    self.p2_3d_base_xyzrxryrz[4] -= np.pi
+                else:
+                    self.p2_3d_base_xyzrxryrz[4] += 0
+                self.p1_3d_base_xyzrxryrz[4] += np.pi/6
+                self.p2_3d_base_xyzrxryrz[4] += np.pi/6
+            
             print(f'[p1_3d_base_xyzrxryrz] {self.p1_3d_base_xyzrxryrz}')
             print(f'[p2_3d_base_xyzrxryrz] {self.p2_3d_base_xyzrxryrz}')
 
@@ -451,8 +454,8 @@ class Primitive(object):
 
         ## unlock
         print(f'Unlocking ...')
-        tag = self.arm.move_p(pos=self.p2_3d_base_xyzrxryrz,if_p=True)
-        time.sleep(1)
+        tag = self.arm.move_p(pos=self.p2_3d_base_xyzrxryrz,vel=self.cfg.unlock.unlock_v,if_p=True)
+        time.sleep(2)
         
         ## Current Detection End (1.[safety issue] or 2.[event detected] or 3.[code runs to this line])
         self.monitor_running = False
@@ -461,7 +464,8 @@ class Primitive(object):
 
         ## close gripper
         print(f'Closing Gripper ...')
-        if not tag:
+        # if not tag:
+        if not self.this_pmt.ret == self.SAFETY_ISSUE:
             self.arm.control_gripper(self.cfg.unlock.gripper_value_after)
             time.sleep(2)
         
@@ -503,7 +507,7 @@ class Primitive(object):
 
         ## rotate
         print(f'Rotating ...')
-        tag = self.arm.move_j(self.arm.get_j()-180)
+        tag = self.arm.move_j(joint=self.arm.get_j()-180,vel=self.cfg.rotate.rotate_v)
         time.sleep(2)
 
         ## Current Detection End (1.[safety issue] or 2.[event detected] or 3.[code runs to this line])
@@ -549,7 +553,7 @@ class Primitive(object):
         
         ## open
         print(f'opening ...')
-        self.base.move_open_door(self.cfg.open.linear_T,self.cfg.open.angular_T)
+        self.base.move_open_door(self.cfg.open.T,self.cfg.open.linear_velocity,self.cfg.open.angular_velocity)
         time.sleep(3)
 
         ## Current Detection End (1.[safety issue] or 2.[event detected] or 3.[code runs to this line])
@@ -587,7 +591,7 @@ class Primitive(object):
         self.base.move_T(-self.cfg.home.move_T)
         time.sleep(1)
         self.arm.go_home()
-        self.base.move_location([self.start_x,self.start_y,self.start_theta])
+        self.base.move_location([self.base.start_x,self.base.start_y,self.base.start_theta])
         time.sleep(1)
         self.base.move_T(self.cfg.home.move_T)
         time.sleep(1)
@@ -632,8 +636,8 @@ class Primitive(object):
         time.sleep(2)
         self.base.move_T(-self.cfg.finish.move_T)
         time.sleep(1)
-        self.arm.go_finish()
-        self.base.move_location([self.start_x,self.start_y,self.start_theta])
+        self.arm.go_home()
+        self.base.move_location([self.base.start_x,self.base.start_y,self.base.start_theta])
         time.sleep(1)
         self.base.move_T(self.cfg.finish.move_T)
         time.sleep(1)
@@ -695,7 +699,7 @@ class Primitive(object):
         elif primitive_type == self.UNLOCK:
             ret,error = self.unlock()
         elif primitive_type == self.OPEN:
-            ret,error = self.open(open_T=_param[0])
+            ret,error = self.open()
         elif primitive_type == self.HOME:
             ret,error = self.home()
         elif primitive_type == self.FINISH:

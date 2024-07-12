@@ -87,7 +87,7 @@ def handeye_calibration(data_folder,save_path="cam2base_H.csv",grid_num=(10,7),c
 
 
 if __name__ == "__main__":
-    data_folder = r'E:/realman-robot/open_door/arm_package/handeye_calibration/data/left_arm_2/'
+    data_folder = r'E:/realman-robot/open_door/arm_package/handeye_calibration/data/left_arm_3/'
     save_path = f'{data_folder}/cam2base_H.csv'
     grid_num=(10,7)
     cell_width = 2.18182 # 24.0/11
