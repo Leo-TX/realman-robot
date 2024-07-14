@@ -147,11 +147,12 @@ class Base(object):
                 time.sleep(0.01)
             if angular_velocity<=0:
                 self.move_char(char='a')
+                time.sleep(0.01)
+                self.move_char(char='a')
             else:
                 self.move_char(char='d')
-
-            # self.move(linear_velocity,angular_velocity)
-
+                time.sleep(0.01)
+                self.move_char(char='d')
             time.sleep(0.01)
             num+=1
             if if_p:
@@ -165,9 +166,10 @@ class Base(object):
         x,y,z = [0,0,0]
         distance = abs(A * x + B * y + C * z + D) / np.sqrt(A**2 + B**2 + C**2)
         T = (distance-offset_in_front)*d2t_coefficient
-        print(f"distance: {distance}")
-        print(f"T: {T}")
+        print(f"[distance]: {distance}")
+        print(f"[T]: {T}")
         self.move_T(T=T)
+        return T
 
     def move_keyboard_win(self, interval=0.1):
         import msvcrt
@@ -264,10 +266,10 @@ if __name__ == "__main__":
     print(base)
 
     ## move keyboard
-    # base.move_keyboard(interval=0.1)
+    base.move_keyboard(interval=0.1)
 
     ## open door
-    base.move_open_door(T=5,linear_velocity=-0.8,angular_velocity=0.6,if_p=False)
+    # base.move_open_door(T=5,linear_velocity=-0.8,angular_velocity=0.6,if_p=False)
 
     ## disconnct
     # base.disconnect()

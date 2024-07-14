@@ -46,6 +46,9 @@ class GEMINI(object):
         print(to_markdown(response.text))
         return response
     
+    def text_img_to_text(self, prompt="What is the meaning of life?", img=None):
+        pass
+    
     # ## input: text; output in chunks
 # response = model.generate_content("What is the meaning of life?", stream=True)
 # for chunk in response:

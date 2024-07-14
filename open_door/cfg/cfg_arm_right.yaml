@@ -3,8 +3,10 @@ host_port: 8080
 cam2base_H_path: 'cfg/cam2base_H_right.csv'
 tool_frame: 'dh3'
 home_state: [-4.303,-95.307,-80.395,12.244,3.457,-8.106,20.592]
+middle_state: [-92.13600158691406, -104.75299835205078, -79.63099670410156, 131.13800048828125, 17.636999130249023, 50.534000396728516, 31.172000885009766]
 arm_vel: 15
 dmp_refer_tjt_path: 'cfg/refer_tjt_right.csv'
+dmp_middle_point: 95
 if_gripper: True
 gripper_force: 30
 gripper_start_pos: 1000

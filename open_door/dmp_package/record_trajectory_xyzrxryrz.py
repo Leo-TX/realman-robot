@@ -18,22 +18,20 @@ import sys
 root_dir = '../'
 sys.path.append(root_dir)
 from arm import Arm
-tjt_path = f'./example_data/data4/refer_tjt.csv'
+tjt_path = f'./example_data/data5/refer_tjt.csv'
 if not os.path.exists(os.path.dirname(tjt_path)):
     os.makedirs(os.path.dirname(tjt_path))
 
 print ('Program started')
-arm= Arm.init_from_yaml(cfg_path=f'{root_dir}/cfg/cfg_arm_left.yaml')
+arm= Arm.init_from_yaml(root_dir=root_dir,cfg_path='/cfg/cfg_arm_left.yaml')
 
 # ## for right
-# initial_pos = [0.008727000094950199, -0.1794009953737259, -0.7527850270271301, -3.069000005722046, 0.050999999046325684, -0.5910000205039978]
-# middle_pose = [0.42829400300979614, -0.3133080005645752, -0.127469003200531, -1.5019999742507935, -1.1169999837875366, -2.009000062942505]
+initial_pos = arm.get_p()
 # goal_pos = [0.5977209806442261, -0.3816089928150177, -0.13437800109386444, -1.6299999952316284, -1.0529999732971191, -1.9520000219345093]
 
 ## for left
-initial_pos = [0.7207099795341492, -0.20441000163555145, 0.2483779937028885, -1.5809999704360962, 0.515999972820282, -2.0369999408721924]
-middle_pose = [0.08501899987459183, -0.42847099900245667, 0.375230997800827, -1.1480000019073486, 0.5239999890327454, -3.125999927520752]
-goal_pos = [0.0728359967470169, -0.5675070285797119, 0.4437209963798523, -1.0709999799728394, 0.4970000088214874, -3.072000026702881]
+initial_pos = arm.get_p()
+goal_pos = [0.04057649441410044, -0.4961351125061162, 0.35628125065273525, -1.232304317063886, 0.4793805477270232, -3.1141333212147453]
 
 pos_record_x = list()
 pos_record_y = list()
@@ -86,8 +84,8 @@ data_thread = threading.Thread(target=collect_data)
 data_thread.start()
 
 # --- Initial Movements (Will happen concurrently with data collection) ---
-# arm.go_home()
-arm.move_p(middle_pose)
+# arm.move_j(arm.home_state)
+arm.move_j(arm.middle_state)
 arm.move_p(goal_pos)
 record_enable = True  # Data recording will start now
 

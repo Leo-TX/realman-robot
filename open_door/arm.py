@@ -41,15 +41,18 @@ GRIPPER_BAUDRATE = 115200
 GRIPPER_DEVICE = 1
 
 class Arm():
-    def __init__(self,root_dir='./',host_ip='192.168.10.19',host_port=8080,cam2base_H_path='cfg/cam2base_H_right.csv',tool_frame='dh3',home_state=[0,0,0,0,0,0,0],arm_vel=15,dmp_refer_tjt_path='cfg/refer_tjt_right.csv',if_gripper=False,gripper_force=30,gripper_start_pos=1000,gripper_vel=50):
+    def __init__(self,root_dir='./',host_ip='192.168.10.19',host_port=8080,cam2base_H_path='cfg/cam2base_H_right.csv',tool_frame='dh3',home_state=[0,0,0,0,0,0,0],middle_state=[0,0,0,0,0,0,0],arm_vel=15,dmp_refer_tjt_path='cfg/refer_tjt_right.csv',dmp_middle_point=100,if_gripper=False,gripper_force=30,gripper_start_pos=1000,gripper_vel=50):
         self.root_dir = root_dir
         self.host_ip = host_ip
         self.host_port = host_port
         self.tool_frame = tool_frame
         self.home_state = home_state
-        self.cam2base_H = read_csv_file(f'{root_dir}/{cam2base_H_path}')
+        self.middle_state = middle_state
+        self.cam2base_H_path = cam2base_H_path
+        self.cam2base_H = read_csv_file(f'{self.root_dir}/{self.cam2base_H_path}')
         self.arm_vel = arm_vel
         self.dmp = DMP(f'{root_dir}/{dmp_refer_tjt_path}')
+        self.dmp_middle_point = dmp_middle_point
 
         self.if_gripper = if_gripper
         self.gripper_force = gripper_force
@@ -59,12 +62,12 @@ class Arm():
         self.connect()
         if if_gripper:
             self.connect_gripper(gripper_force,gripper_start_pos,gripper_vel)
-        self.home()
+        # self.home()
     
     @classmethod
     def init_from_yaml(cls,root_dir='./',cfg_path='cfg/cfg_arm_right.yaml'):
         cfg = read_yaml_file(f'{root_dir}/{cfg_path}', is_convert_dict_to_class=True)
-        return cls(root_dir,cfg.host_ip,cfg.host_port,cfg.cam2base_H_path,cfg.tool_frame,cfg.home_state,cfg.arm_vel,cfg.dmp_refer_tjt_path,cfg.if_gripper,cfg.gripper_force,cfg.gripper_start_pos,cfg.gripper_vel)
+        return cls(root_dir,cfg.host_ip,cfg.host_port,cfg.cam2base_H_path,cfg.tool_frame,cfg.home_state,cfg.middle_state,cfg.arm_vel,cfg.dmp_refer_tjt_path,cfg.dmp_middle_point,cfg.if_gripper,cfg.gripper_force,cfg.gripper_start_pos,cfg.gripper_vel)
 
     def __str__(self):
         # self.get_j()
@@ -171,7 +174,7 @@ class Arm():
             print(f'[Arm INFO]: - {self.move_p.__name__}: {tag}')
         return tag
 
-    def move_p_dmp(self,pos,vel=None,save_dir=None,if_p=False):
+    def move_p_dmp(self,pos,vel=None,save_dir=None,if_p=False,if_planb=False):
         if not vel:
             vel = self.arm_vel
         if save_dir:
@@ -181,7 +184,7 @@ class Arm():
         else:
             self.new_tjt = self.dmp.gen_new_tjt(initial_pos=self.get_p(),goal_pos=pos,if_save=False)
         # start moving
-        for num in range(90,100,2):
+        for num in range(self.dmp_middle_point-5,self.dmp_middle_point+5,3):
             self.middle_pose = self.dmp.get_middle_pose(tjt=self.new_tjt,num=num)
             tag1 = self.move_p(pos=self.middle_pose,vel=vel,if_p=if_p)
             if tag1 == 0:
@@ -190,6 +193,12 @@ class Arm():
             tag2 = self.move_p(pos=pos,vel=vel,if_p=if_p)
         else:
             tag2 = -1
+
+        if if_planb:
+            if tag2 != 0:
+                if tag1 != 0:
+                    tag1 = self.move_j(joint=self.middle_state,vel=vel,if_p=if_p)
+                tag2 = self.move_p(pos=pos,vel=vel,if_p=if_p)
         return tag1 !=0 or tag2 != 0
 
     def move_poses(self,poses,vel=None,trajectory_connect=1,if_p=False):
@@ -325,6 +334,7 @@ class Arm():
         return tag1,tag2
 
     def target2cam_xyzrpy_to_target2base_xyzrpy(self,target2cam_xyzrpy):
+        self.cam2base_H = read_csv_file(f'{self.root_dir}/{self.cam2base_H_path}')
         cam2base_H = self.cam2base_H
         target2cam_R = EulerAngle_to_R(np.array(target2cam_xyzrpy[3:]),rad=True)
         target2cam_t = xyz_to_t(np.array(target2cam_xyzrpy[:3]))
@@ -387,17 +397,28 @@ if __name__ =="__main__":
 
     arm = arm_r
 
+    arm.control_gripper(open_value=0)
+    time.sleep(2)
+
     ## get info
     arm.get_j(if_p=True)
     arm.get_p(if_p=True)
-    # arm.get_c(if_p=True)
+    arm.get_c(if_p=True)
 
     ## go home   
     # arm.go_home()
+    # arm.move_j(arm.middle_state)
+
+    ## move
+    arm.move_p(pos=[0.722744238409637, -0.35936270470178727, -0.2503036811899441, -1.5166207229832995, 0.5429487854513906, -1.9073816340681644],if_p=True)
 
     
-    ## move
-    arm.move_p(pos= [0.5041879440137199, -0.363930156135148, -0.12988967238647242, -1.542752633571267, -1.0287198876671146, -1.8164599549929437],vel=10,if_p=True)
+    # arm.move_p(pos=[0.046781850270952635, -0.488607021766447, 0.4890302344099652, -0.9434692705725272, 0.48256544254088096, -3.153262159111574],if_p=True)
+    # arm.move_p(pos= [0.15037716079279767, -0.474297955667157, 0.5592653180187473, -0.9434692705725272, 0.48256544254088096, -3.153262159111574],if_p=True)
+    # joint = arm.get_j()
+    # joint[6] -= 90
+    # arm.move_j(joint=joint,if_p=True)
+    # arm.move_p(pos=[0.14820259395366925, -0.4608619310136742, 0.5318642318734126, -0.5380913990779719,0.9355733389058127615373566167205, -2.2079234110419055],vel=10,if_p=True)
 
     # arm.move_p(pos=[0.12317908357308621, -0.5464211211674885, 0.44482142917458123, -0.07637366085514001, 0.0785014252930375, -1.787004206391503],vel=10,if_p=True)
     # arm.move_p(pos=[0.12317908357308621, -0.5464211211674885, 0.44482142917458123, -1.0709999799728394, 0.4970000088214874, -3.072000026702881],vel=10,if_p=True)

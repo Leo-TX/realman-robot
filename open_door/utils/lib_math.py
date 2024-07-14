@@ -125,6 +125,30 @@ def normal2rxryrz(normal,if_p=False):
             print(f'rx:{rx} ry:{ry} rz:{rz}')
         return rx,ry,rz
 
+# def normal2rxryrz_left(normal,if_p=False):
+#         from scipy.spatial.transform import Rotation as R
+#         original_normal = np.array(normal)
+#         normal = original_normal * -1
+#         z_axis = normal / np.linalg.norm(normal)
+#         initial_x_axis = np.array([0, -1, 0])
+#         x_axis = initial_x_axis - np.dot(initial_x_axis, z_axis) * z_axis
+#         x_axis /= np.linalg.norm(x_axis)
+#         y_axis = np.cross(z_axis, x_axis)
+#         rotation_matrix = np.column_stack((x_axis, y_axis, z_axis))
+#         euler_angles = R.from_matrix(rotation_matrix).as_euler('xyz')
+#         rx,ry,rz = euler_angles
+#         if if_p:
+#             print(f'original_normal:\n{original_normal}')
+#             print(f'normal:\n{normal}')
+#             print(f'z_axis:\n{z_axis}')
+#             print(f'initial_x_axis:\n{initial_x_axis}')
+#             print(f'x_axis:\n{x_axis}')
+#             print(f'y_axis:\n{y_axis}')
+#             print(f'rotation_matrix:\n{rotation_matrix}')
+#             print(f'euler_angles:\n{euler_angles}')
+#             print(f'rx:{rx} ry:{ry} rz:{rz}')
+#         return rx,ry,rz
+
 def test1():
     R = [[-0.06472430155853726,-0.9973381232093603,-0.03357726583553946,],[-0.9973485867817671,0.06353005346138718,0.03549265771403007],[-0.033265015138603936,0.03578547611006781,-0.9988057060647002]]
     R= [[-0.99978544 , 0.01618313,  0.01292909],[ 0.01924667 , 0.95650893  ,0.29106747],[-0.00765641  ,0.29125386 ,-0.95661516]]
@@ -153,7 +177,8 @@ def test4():
 
 def test5():
     # target2cam_rpy = [0.32611863105745464, -0.09393242756730547, -0.03171004262462371]
-    target2cam_rpy = [0.3624729993914516,-0.0035345173383167783, -0.001340387386237124]
+    # target2cam_rpy = [0.3624729993914516,-0.0035345173383167783, -0.001340387386237124]
+    target2cam_rpy = [0.3631291403893837, -0.008841798828976621, -0.003359646326433152]
     target2base_rpy = [-1.0709999799728394, 0.4970000088214874, -3.072000026702881]
 
     target2cam_R = EulerAngle_to_R(target2cam_rpy,rad=True)
@@ -163,6 +188,17 @@ def test5():
     print(f'cam2base_R:\n{cam2base_R}')
 
 def test6():
+    target2cam_xyzrpy = [-0.1628399655335031, 0.10138762431558286, 0.5439752324490061, 0.3631291403893837, -0.008841798828976621, -0.003359646326433152] 
+    target2cam_H = xyzrpy_to_H(target2cam_xyzrpy,rad=True)
+    
+    target2base_xyzrpy = [0.0728359967470169, -0.5675070285797119, 0.4437209963798523, -1.0709999799728394, 0.4970000088214874, -3.072000026702881]
+    target2base_H = xyzrpy_to_H(target2base_xyzrpy,rad=True)
+
+    cam2base_H = np.linalg.inv(target2cam_H) @ target2base_H
+    
+    print(f'cam2base_H:\n{cam2base_H}')
+
+def test7():
     xyzrpy = np.array([0.1,0.2,0.3,170,120,60])
     R = EulerAngle_to_R(xyzrpy[3:6])
     t = xyz_to_t(xyzrpy[0:3])
@@ -182,3 +218,4 @@ def test6():
 
 if __name__ == '__main__':
     test5()
+    test6()
