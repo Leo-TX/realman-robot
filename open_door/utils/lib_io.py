@@ -32,7 +32,7 @@ def read_csv_file(file_path):
     data_np = np.array(data, dtype=np.float32)
     return data_np
 
-def get_filenames(folder, is_base_name=False):
+def get_filenames(folder, is_base_name=False, filter=None): # filter: 'png' ,'txt' ...
     ''' Get all filenames under the specific folder. 
     e.g.:
         full name: data/rgb/000001.png
@@ -41,9 +41,30 @@ def get_filenames(folder, is_base_name=False):
     full_names = sorted(glob.glob(folder + "/*"))
     if is_base_name:
         base_names = [name.split("/")[-1] for name in full_names]
+        if filter:
+            base_names = [name for name in base_names if name.endswith(filter)]
         return base_names
     else:
+        if filter:
+            full_names = [name for name in full_names if name.endswith(filter)]
         return full_names
+
+def rename_files_sequentially(folder):
+    """Renames all files in a folder sequentially starting from 0.
+
+    Args:
+        folder (str): The path to the folder containing the files.
+    """
+
+    files = sorted(os.listdir(folder))
+    for i, file in enumerate(files):
+        old_path = os.path.join(folder, file)
+        extension = os.path.splitext(file)[1]
+        new_file = f"{i}{extension}"
+        new_path = os.path.join(folder, new_file)
+        os.rename(old_path, new_path)
+        # print(f"Renamed '{file}' to '{new_file}'")
+
 class Config:
     def __init__(self, data):
         for key, value in data.items():
