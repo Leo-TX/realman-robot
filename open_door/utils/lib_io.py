@@ -6,6 +6,8 @@ import csv
 import simplejson
 import time
 import numpy as np
+from PIL import Image
+import cv2
 
 def makedirs(output_folder):
     if not os.path.isdir(output_folder):
@@ -49,22 +51,105 @@ def get_filenames(folder, is_base_name=False, filter=None): # filter: 'png' ,'tx
             full_names = [name for name in full_names if name.endswith(filter)]
         return full_names
 
-def rename_files_sequentially(folder):
-    """Renames all files in a folder sequentially starting from 0.
+def rename_files_sequentially(folder, digits=None):
+    """Renames all files in a folder sequentially.
 
     Args:
         folder (str): The path to the folder containing the files.
+        digits (int, optional): The number of digits for zero-padding 
+                                 the file names. If None, no padding is applied. 
+                                 Defaults to None.
     """
-
     files = sorted(os.listdir(folder))
     for i, file in enumerate(files):
         old_path = os.path.join(folder, file)
         extension = os.path.splitext(file)[1]
-        new_file = f"{i}{extension}"
+
+        if digits is not None:
+            new_file = f"{i:0{digits}}{extension}"  # Apply zero-padding
+        else:
+            new_file = f"{i}{extension}"  # No padding
+
         new_path = os.path.join(folder, new_file)
         os.rename(old_path, new_path)
         # print(f"Renamed '{file}' to '{new_file}'")
 
+def convert_heic_to_png_pyheif(heic_path, png_path):
+    """Converts a HEIC file to PNG format.
+
+    Args:
+        heic_path (str): The path to the HEIC file.
+        png_path (str): The path to save the converted PNG file.
+    """
+    import pyheif
+    heif_file = pyheif.read(heic_path)
+    image = Image.frombytes(
+        heif_file.mode, 
+        heif_file.size, 
+        heif_file.data,
+        "raw",
+        heif_file.mode,
+        heif_file.stride,
+    )
+    image.save(png_path, "PNG")
+
+    import subprocess
+
+def convert_heic_to_png_imagemagick(heic_path, png_path):
+    """Converts a HEIC file to PNG using ImageMagick.
+
+    Args:
+        heic_path (str): The path to the HEIC file.
+        png_path (str): The path to save the PNG file.
+    """
+    ## need to install ImageMagick Application
+    import os
+    os.environ['PATH'] += os.pathsep + r"D:\ImageMagic\ImageMagick-7.1.1-Q16-HDRI"
+    # print(os.environ['PATH'])
+    
+    import subprocess
+    subprocess.run(["magick", "convert", heic_path, png_path])
+
+def resize_and_save_image(image_path, width, height, output_path=None):
+    """Reads a PNG image, resizes it, and saves it to the specified location or overwrites the original file.
+
+    Args:
+        image_path (str): The path to the image file.
+        width (int): The desired width of the resized image.
+        height (int): The desired height of the resized image.
+        output_path (str, optional): The path to save the resized image. 
+                                        If None, the original image file will be overwritten. Defaults to None.
+
+    Returns:
+        bool: True if the image was resized and saved successfully, False otherwise.
+    """
+
+    # Read the image
+    img = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
+
+    if img is None:
+        print(f"Error: Unable to read image from {image_path}")
+        return False
+
+    # Resize the image
+    resized_img = cv2.resize(img, (width, height))
+
+    # Determine the output path
+    if output_path is None:
+        output_path = image_path
+    else:
+        # Create the output directory if it doesn't exist
+        os.makedirs(os.path.dirname(output_path), exist_ok=True) 
+
+    # Save the resized image
+    success = cv2.imwrite(output_path, resized_img)
+
+    if success:
+        print(f"Resized image saved to: {output_path}")
+    else:
+        print(f"Error: Failed to save resized image to {output_path}")
+
+    return success
 class Config:
     def __init__(self, data):
         for key, value in data.items():
@@ -108,14 +193,16 @@ def getch(if_p=False):
     return char
 
 if __name__ == "__main__":
-    interval = 0.1
-    while True:
-        try: 
-            char = getch(if_p=True)
-            time.sleep(interval)  # Adjust delay as needed
-            if char == 'q':
-                break
-            if char == '0':
-                print('000')
-        except KeyboardInterrupt:  # Allow Ctrl+C to exit
-            break
+    root_dir = r'E:\realman-robot\open_door\data\images2'
+    rename_files_sequentially(folder=root_dir,digits=3)
+    
+    new_root_dir = r'E:\realman-robot\open_door\data\images3_png'
+    if not os.path.exists(new_root_dir):
+        os.makedirs(new_root_dir)
+
+    names = get_filenames(folder=root_dir,is_base_name=False,filter='HEIC')
+    
+    for name in names:
+        png_path = f"{new_root_dir}/{os.path.basename(name.replace('HEIC','png'))}"
+        convert_heic_to_png_imagemagick(heic_path=name,png_path=png_path)
+        resize_and_save_image(png_path, width=1280, height=720, output_path=None)

@@ -58,5 +58,29 @@ class DTSAM():
         # print(f'box:{box}')
         return x,y,orientation,w,h,box
 
+    def process_images_server(self,img_path,server,remote_python_path,remote_root_dir,remote_img_dir):
+        local_img_path = img_path
+        
+        remote_dtsam_script_dir = f'{remote_root_dir}/dtsam_package/'
+        remote_dtsam_script_path = f'detic_sam.py'
+        remote_img_path = f'{remote_img_dir}/{os.path.basename(local_img_path)}'
+
+        # transfer the input image file to the server
+        server.exec_cmd(f'mkdir -p {remote_img_dir}/dtsam/')
+        server.transfer_file_local2remote(local_img_path,remote_img_path)
+
+        # dtsam
+        dtsam_cmd = f'cd {remote_dtsam_script_dir}; {remote_python_path} {remote_dtsam_script_path} -i {remote_img_path} -c {self.classes} -d {self.device} -t {self.threshold}'
+        server.exec_cmd(dtsam_cmd)
+
+        f_name = os.path.basename(local_img_path).split('.')[0]
+
+        # transfer the output dir to the server
+        # server.transfer_folder_remote2local(f'{remote_img_dir}/dtsam/', f'{os.path.dirname(local_img_path)}/{f_name}_dtsam/')
+
+        server.transfer_file_remote2local(f'{remote_img_dir}/dtsam/dtsam_result.json',f'{os.path.dirname(local_img_path)}/{f_name}.json',if_p=False)
+        server.transfer_file_remote2local(f'{remote_img_dir}/dtsam/center.png',f'{os.path.dirname(local_img_path)}/{f_name}_mask.png',if_p=False)
+
+
 if __name__ == "__main__":
     dtsam = DTSAM.init_from_yaml(cfg_path='cfg/cfg_dtsam.yaml')

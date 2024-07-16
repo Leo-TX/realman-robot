@@ -1,9 +1,11 @@
 import os
 import json
+import re
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageTk, ImageDraw
 import numpy as np
+
 from utils.lib_rgbd import *
 
 class HandleAnnotationTool:
@@ -96,7 +98,8 @@ class HandleAnnotationTool:
     def load_images(self):
         """Loads images and corresponding JSON data from the root directory."""
         self.image_files = sorted([
-            f for f in os.listdir(self.root_dir) if f.endswith('.png')
+            f for f in os.listdir(self.root_dir) 
+            if f.endswith('.png') and re.match(r'^\d+$', os.path.splitext(f)[0])
         ])
         self.annotation_data = {}
         for image_file in self.image_files:
@@ -252,16 +255,28 @@ class HandleAnnotationTool:
         if self.p1 is not None:
             Cx = self.annotation_data[image_file]['Cx']
             Cy = self.annotation_data[image_file]['Cy']
-            dx = round(self.p1[0] - Cx)
-            dy = round(self.p1[1] - Cy)
+            dx = self.p1[0] - Cx
+            dy = self.p1[1] - Cy
             if self.p2 is not None:
                 if self.orientation == 'horizontal':
-                    R = round(self.p2[0] - self.p1[0])
+                    R = self.p2[0] - self.p1[0]
                 elif self.orientation == 'vertical':
-                    R = round(self.p2[1] - self.p1[1])
+                    R = self.p2[1] - self.p1[1]
             else:
                 R = 0
-            annotation_str = f"{dx} {dy} {R}"
+            
+            # save to json
+            self.annotation_data[image_file]['dx'] = dx
+            self.annotation_data[image_file]['dy'] = dy
+            self.annotation_data[image_file]['R'] = R
+            json_file = os.path.splitext(image_file)[0] + '.json'
+            json_path = os.path.join(self.root_dir, json_file)
+            with open(json_path, 'w') as f:
+                json.dump(self.annotation_data[image_file],f,indent=4)
+
+            # save to txt
+            box = self.annotation_data[image_file]['box']
+            annotation_str = f"{box[0]} {box[1]} {box[2]} {box[3]} {dx} {dy} {R}"
             txt_file = os.path.splitext(image_file)[0] + '.txt'
             txt_path = os.path.join(self.root_dir, txt_file)
             with open(txt_path, 'w') as f:
@@ -299,6 +314,7 @@ class HandleAnnotationTool:
                 vis_grasp(img_path,dx,dy,x1_2d,y1_2d,x2_2d,y2_2d,Ox,Oy,R,orientation,angle,save_path)
 
             messagebox.showinfo("Annotation Saved", f"Annotation for {image_file} saved successfully!")
+            
         self.next_image()
 
     def run(self):
@@ -306,6 +322,6 @@ class HandleAnnotationTool:
         self.window.mainloop()
 
 if __name__ == "__main__":
-    root_dir = r'E:\realman-robot\open_door\data\images'
+    root_dir = r'E:\realman-robot\open_door\data\images3_png'
     handle_annotation_tool = HandleAnnotationTool(root_dir=root_dir)
     handle_annotation_tool.run()
