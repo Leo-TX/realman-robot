@@ -2,7 +2,6 @@ from PIL import Image, ImageDraw
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
-from matplotlib.patches import FancyArrowPatch
 
 def rotate_point(x1_2d,y1_2d,R,orientation='horizontal',angle=90):
         angle_rad = np.radians(angle)
@@ -150,10 +149,12 @@ def vis_d(d_img_path,save_path,show=False):
         plt.show()
 
 if __name__ == "__main__":
-    x1_2d,y1_2d=296.145592864638,521.3862801678908
-    R = -100
-    orientation = 'horizontal'
+    x1_2d,y1_2d=368.35743484925905,427.1806336228922
+    dx = -8
+    dy = 50
+    R = -150
+    orientation = 'vertical'
     angle=90
-    rgb_img_path = r'E:\realman-robot\open_door\data\trajectory_025\1\rgb.png'
+    img_path = r'E:\realman-robot\open_door\data\trajectory_045\1\rgb.png'
     x2_2d,y2_2d,Ox,Oy = rotate_point(x1_2d,y1_2d,R,orientation,angle)
-    vis_grasp(rgb_img_path,x1_2d,y1_2d,x2_2d,y2_2d,Ox,Oy,R,orientation,angle,save_path=rgb_img_path.replace('rgb','vis_grasp'),show=True)
+    vis_grasp(img_path, dx, dy,x1_2d,y1_2d,x2_2d,y2_2d,Ox,Oy,R,orientation,angle,save_path=img_path.replace('rgb','vis_grasp'),show=True)

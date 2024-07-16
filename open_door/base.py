@@ -86,21 +86,22 @@ class Base(object):
         response = self.client_socket.recv(1024).decode()
         # print("response:", response)
 
-    def move_stop(self):
+    def move_stop(self,if_p=False):
         command = f"/api/estop"
         self.client_socket.send(command.encode('utf-8'))
         response = self.client_socket.recv(1024).decode()
         # print("response:", response)
-
+        if if_p:
+            print(f'[Base Stop]')
 
     def move_char(self,char):
-        if char == "w":
+        if char == "w" or char == "H":
             self.move_forward()
-        elif char == "s":
+        elif char == "s" or char == "P":
             self.move_back()
-        elif char == "a":
+        elif char == "a" or char == "K":
             self.move_left()
-        elif char == "d":
+        elif char == "d" or char == "M":
             self.move_right()
         elif char == "x":  # Stop
             self.move_forward(0)
@@ -131,27 +132,23 @@ class Base(object):
         if not angular_velocity:
             angular_velocity = self.angular_velocity
         while True:
-            if linear_velocity<=0:
+            if linear_velocity<0:
                 self.move_char(char='s')
                 time.sleep(0.01)
                 self.move_char(char='s')
                 time.sleep(0.01)
                 self.move_char(char='s')
                 time.sleep(0.01)
-            else:
+            elif linear_velocity>0:
                 self.move_char(char='w')
                 time.sleep(0.01)
                 self.move_char(char='w')
                 time.sleep(0.01)
                 self.move_char(char='w')
                 time.sleep(0.01)
-            if angular_velocity<=0:
+            if angular_velocity<0:
                 self.move_char(char='a')
-                time.sleep(0.01)
-                self.move_char(char='a')
-            else:
-                self.move_char(char='d')
-                time.sleep(0.01)
+            elif angular_velocity>0:
                 self.move_char(char='d')
             time.sleep(0.01)
             num+=1
@@ -174,8 +171,17 @@ class Base(object):
     def move_keyboard_win(self, interval=0.1):
         import msvcrt
         def getch():
-            char = msvcrt.getch().decode('utf-8')
-            return char
+            char = msvcrt.getch()
+            if char == b'\xe0':
+                return {
+                    b'H': "up",
+                    b'P': "down",
+                    b'K': "left",
+                    b'M': "right",
+                }.get(char, None)
+            else:
+                return char.decode('utf-8') 
+
         while True:
             try: 
                 if msvcrt.kbhit():
@@ -262,14 +268,15 @@ class Base(object):
 
 if __name__ == "__main__":
     ## init
-    base = Base.init_from_yaml(cfg_path='cfg/cfg_base.yaml')
+    # base = Base.init_from_yaml(cfg_path='cfg/cfg_base.yaml')
+    base = Base(linear_velocity=0.5,angular_velocity=1.0)
     print(base)
 
     ## move keyboard
-    base.move_keyboard(interval=0.1)
+    base.move_keyboard(interval=0.05)
 
     ## open door
-    # base.move_open_door(T=5,linear_velocity=-0.8,angular_velocity=0.6,if_p=False)
+    # base.move_open_door(T=5,linear_velocity=-0.8,angular_velocity=0,if_p=False) # -0.6
 
     ## disconnct
     # base.disconnect()

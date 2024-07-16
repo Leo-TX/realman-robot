@@ -4,6 +4,7 @@ import glob
 import yaml
 import csv
 import simplejson
+import time
 import numpy as np
 
 def makedirs(output_folder):
@@ -50,3 +51,50 @@ class Config:
                 setattr(self, key, self.__class__(value))
             else:
                 setattr(self, key, value)
+
+def getch_win():
+    import msvcrt
+    char = msvcrt.getch()
+    # special char
+    if char == b'\xe0':
+        return {
+            b'U': "up",
+            b'P': "down",
+            b'K': "left",
+            b'M': "right",
+        }.get(char, None)
+    # normal char
+    else:
+        return char.decode('utf-8')
+
+def getch_linux():
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        char = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return char
+    
+def getch(if_p=False):
+    if os.name == 'nt':  # Windows
+       char = getch_win()
+    else:  # Linux
+       char = getch_linux()
+    if if_p:
+        print(f'char: {char}')
+    return char
+
+if __name__ == "__main__":
+    interval = 0.1
+    while True:
+        try: 
+            char = getch(if_p=True)
+            time.sleep(interval)  # Adjust delay as needed
+            if char == 'q':
+                break
+            if char == '0':
+                print('000')
+        except KeyboardInterrupt:  # Allow Ctrl+C to exit
+            break

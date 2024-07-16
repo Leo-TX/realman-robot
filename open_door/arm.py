@@ -62,7 +62,7 @@ class Arm():
         self.connect()
         if if_gripper:
             self.connect_gripper(gripper_force,gripper_start_pos,gripper_vel)
-        # self.home()
+        self.home()
     
     @classmethod
     def init_from_yaml(cls,root_dir='./',cfg_path='cfg/cfg_arm_right.yaml'):
@@ -107,7 +107,7 @@ class Arm():
         tag, value = self.arm.Get_Read_Input_Registers(port=GRIPPER_PORT, address=ADDRESS_GET_GRIPPER_INIT_RETURN, device=GRIPPER_DEVICE)
         if value != 1: # 0: not init. 1: init is successful. 2: initializing
             print(f'[Arm Info] Init Failed: {value}!!!!!!! Re-init Gripper...')
-            time.sleep(0.1)
+            time.sleep(0.2)
             self.connect_gripper()
         print('Gripper Connected\n==========')
         return tag
@@ -129,10 +129,10 @@ class Arm():
             print(f'[Gripper INFO] Gripper Pos: {value}')
         return value # 0-1000
 
-    def go_home(self,vel=None):
+    def go_home(self,vel=None,block=True):
         if not vel:
             vel = self.arm_vel
-        self.move_j(joint=self.home_state,vel=vel)
+        self.move_j(joint=self.home_state,vel=vel,block=block)
     
     def get_p(self,if_p=False):
         pose = self.arm.Get_Current_Pose()
@@ -216,8 +216,8 @@ class Arm():
         return tag
 
     def move_c(self):
-        pass
         # Movec_Cmd(self, pose_via, pose_to, v, loop, trajectory_connect, r=0, block=True):
+        pass
 
     def move_j_with_input(self):
         while True:
@@ -268,7 +268,7 @@ class Arm():
     def move_stop(self,if_p=False):
         tag = self.arm.Move_Stop_Cmd(block=True)
         if if_p:
-            print(f'[Arm INFO]: - {self.move_stop.__name__}: {tag}')
+            print(f'[Arm Stop]: - {self.move_stop.__name__}: {tag}')
 
     def rotate_handle_move_teach(self, T=1.0, v=30,if_p=False):
         start_time = time.time()
@@ -390,15 +390,15 @@ class Arm():
 
 if __name__ =="__main__":
     ## connect
-    arm_r = Arm.init_from_yaml(cfg_path='cfg/cfg_arm_right.yaml')
+    # arm_r = Arm.init_from_yaml(cfg_path='cfg/cfg_arm_right.yaml')
     # print(arm_r)
-    # arm_l = Arm.init_from_yaml(cfg_path='cfg/cfg_arm_left.yaml')
+    arm_l = Arm.init_from_yaml(cfg_path='cfg/cfg_arm_left.yaml')
     # print(arm_l)
 
-    arm = arm_r
+    arm = arm_l
 
-    arm.control_gripper(open_value=0)
-    time.sleep(2)
+    # arm.control_gripper(open_value=0)
+    # time.sleep(2)
 
     ## get info
     arm.get_j(if_p=True)
@@ -410,13 +410,13 @@ if __name__ =="__main__":
     # arm.move_j(arm.middle_state)
 
     ## move
-    arm.move_p(pos=[0.722744238409637, -0.35936270470178727, -0.2503036811899441, -1.5166207229832995, 0.5429487854513906, -1.9073816340681644],if_p=True)
+    # arm.move_p(pos=[0.722744238409637, -0.35936270470178727, -0.2503036811899441, -1.5166207229832995, 0.5429487854513906, -1.9073816340681644],if_p=True)
 
     
     # arm.move_p(pos=[0.046781850270952635, -0.488607021766447, 0.4890302344099652, -0.9434692705725272, 0.48256544254088096, -3.153262159111574],if_p=True)
     # arm.move_p(pos= [0.15037716079279767, -0.474297955667157, 0.5592653180187473, -0.9434692705725272, 0.48256544254088096, -3.153262159111574],if_p=True)
     # joint = arm.get_j()
-    # joint[6] -= 90
+    # joint[6] += 90
     # arm.move_j(joint=joint,if_p=True)
     # arm.move_p(pos=[0.14820259395366925, -0.4608619310136742, 0.5318642318734126, -0.5380913990779719,0.9355733389058127615373566167205, -2.2079234110419055],vel=10,if_p=True)
 

@@ -23,8 +23,8 @@ premove:
   d2t_coefficient: 4.8
 grasp:
   gripper_value: 50
-  p1_depth_offset: 0.00 # m
-  p2_depth_offset: 0.04 # m
+  p1_depth_offset: -0.01 # m
+  p2_depth_offset: 0.02 # m 0.06
 unlock:
   unlock_v: 5
   gripper_value_before: 500 
@@ -33,10 +33,11 @@ rotate:
   rotate_v: 5
   gripper_value: 50
 open:
-  gripper_value: 50
+  gripper_value_pull: 50
+  gripper_value_push: 50
   T: 5 # s
-  linear_velocity: 0.8 # >0
-  angular_velocity: 0.6 # >0
+  linear_velocity: 0.8 # 0.8, >0
+  angular_velocity: 0 # 0.6 >0
 home:
   gripper_value: 1000
   move_T: 0.5
@@ -54,9 +55,9 @@ threshold:
   unlock:
     l: -18000
     h: 18000
-    stop_l_left: -5000
+    stop_l_left: -3000 # mainly for joint[2]## TODO for vertical one
     stop_h_left: 15000
-    stop_l_right: -3000
+    stop_l_right: -3000 
     stop_h_right: 15000
   rotate:
     l: -18000
@@ -68,8 +69,9 @@ threshold:
   open:
     l: -25000
     h: 25000
-    pull_j3_l_right: -10000
-    pull_j3_l_left: -10000  ## todo
+    pull_j3_l_right: -4500
+    pull_j3_l_left: -1000
+
     push_j3_h_right: 15000
     push_j3_h_left: 4000
 
@@ -85,6 +87,7 @@ pmts:
   finish: 7
   back: 8
   clear: 9
+  teleoperation: 10
 
 ## error types
 errors:
