@@ -28,6 +28,7 @@ from ransac import RANSAC
 from dmp import DMP
 from gemini import GEMINI
 from _primitive import _Primitive
+from hgum import HandleGraspUnlockModel as HGUM
 
 from utils.lib_math import *
 from utils.lib_io import *
@@ -74,6 +75,9 @@ class Primitive(object):
 
         ## init gemini
         self.gemini = GEMINI.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_gemini}')
+
+        ## init handle_grasp_model
+        self.hgum = HGUM.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_hgum}')
 
         ## remote
         self.remote_python_path = cfg.remote_python_path

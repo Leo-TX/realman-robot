@@ -8,7 +8,7 @@ import numpy as np
 
 from utils.lib_rgbd import *
 
-class HandleAnnotationTool:
+class HandleDataAnnotator:
     def __init__(self, root_dir=None):
         """Initializes the annotation tool."""
 
@@ -323,5 +323,5 @@ class HandleAnnotationTool:
 
 if __name__ == "__main__":
     root_dir = r'E:\realman-robot\open_door\data\lever_handle'
-    handle_annotation_tool = HandleAnnotationTool(root_dir=root_dir)
-    handle_annotation_tool.run()
+    handle_data_annotator = HandleDataAnnotator(root_dir=root_dir)
+    handle_data_annotator.run()

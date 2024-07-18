@@ -12,6 +12,7 @@ cfg_server: 'cfg/cfg_server.yaml'
 cfg_ransac: 'cfg/cfg_ransac.yaml'
 cfg_dtsam: 'cfg/cfg_dtsam.yaml'
 cfg_gemini: 'cfg/cfg_gemini.yaml'
+cfg_hgum: 'cfg/cfg_hgum.yaml'
 
 ## remote
 remote_python_path: '/media/datadisk10tb/leo/anaconda3/envs/rm/bin/python'

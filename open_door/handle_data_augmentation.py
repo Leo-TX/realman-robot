@@ -7,16 +7,17 @@ import numpy as np
 
 from utils.lib_rgbd import *
 
-class DataAugmentator:
-    def __init__(self, input_dir, output_dir, translation_x_min=-30, translation_x_max=30,
-                 translation_y_min=-30, translation_y_max=30, translation_num=5,
-                 ratio_min=0.8, ratio_max=1.2, resize_num=5):
+class HandleDataAugmentator:
+    def __init__(self, input_dir, output_train_dir, output_test_dir, train_ratio=1.0, translation_x_min=-30, translation_x_max=30,
+                 translation_y_min=-30, translation_y_max=30, translation_num=8,
+                 ratio_min=0.8, ratio_max=1.2, resize_num=8):
         """
         Initializes the DataAugmentator class with augmentation parameters.
 
         Args:
             input_dir (str): The directory containing the input images and JSON files.
-            output_dir (str): The directory to save the augmented data.
+            output_train_dir (str): The directory to save the augmented data.
+            output_test_dir (str): The directory to save the augmented data.
             translation_x_min (int, optional): Minimum translation in x-axis. Defaults to -50.
             translation_x_max (int, optional): Maximum translation in x-axis. Defaults to 50.
             translation_y_min (int, optional): Minimum translation in y-axis. Defaults to -50.
@@ -27,7 +28,9 @@ class DataAugmentator:
             resize_num (int, optional): Number of random resizes to perform. Defaults to 5.
         """
         self.input_dir = input_dir
-        self.output_dir = output_dir
+        self.output_train_dir = output_train_dir
+        self.output_test_dir = output_test_dir
+        self.train_ratio = train_ratio
         self.translation_x_min = translation_x_min
         self.translation_x_max = translation_x_max
         self.translation_y_min = translation_y_min
@@ -38,15 +41,21 @@ class DataAugmentator:
         self.resize_num = resize_num
         self.crop_width = 640
         self.crop_height = 480
-        self.num = 0
+        self.sum = 0
 
-        if not os.path.exists(self.output_dir):
-            os.makedirs(self.output_dir)
+        if not os.path.exists(self.output_train_dir):
+            os.makedirs(self.output_train_dir)
+        if not os.path.exists(self.output_test_dir):
+            os.makedirs(self.output_test_dir)
 
     def augment_data(self):
         """
         Augments the images and annotations in the input directory.
         """
+        image_path_lst = []
+        mask_path_lst = []
+        data_lst = []
+
         for filename in os.listdir(self.input_dir):
             if filename.endswith(".png") and re.match(r'^\d+\.png$', filename):
                 image_path = os.path.join(self.input_dir, filename)
@@ -58,11 +67,22 @@ class DataAugmentator:
                         data = json.load(f)
                     if 'dx' not in data: # not annotated
                         continue
-                    print(f'[num_{self.num}]: processing the {filename}')
-                    self.augment_single_image(image_path,mask_path,data)
-                    self.num += 1
+                    
+                    image_path_lst.append(image_path)
+                    mask_path_lst.append(mask_path)
+                    data_lst.append(data)
+                    self.sum += 1
 
-    def visualization(self,data,new_filename):
+        print(f'[Sum]: {self.sum}')
+        for i in range(self.sum):
+            print(f'[num_{i}] ...')
+            if i <= int(self.train_ratio*self.sum):
+                output_dir = self.output_train_dir
+            else: 
+                output_dir = self.output_test_dir
+            self.augment_single_image(image_path_lst[i],mask_path_lst[i],data_lst[i],output_dir)
+
+    def visualization(self,data,img_path,save_path):
         if data['R'] != 0:
             x1_2d, y1_2d = data['Cx'] + data['dx'], data['Cy'] + data['dy']
             dx = data['dx']
@@ -70,12 +90,10 @@ class DataAugmentator:
             R = data['R']
             orientation = data['orientation']
             angle = 90
-            img_path = os.path.join(self.output_dir, new_filename)
-            save_path = img_path.replace('.png', '_vis.png')
             x2_2d, y2_2d, Ox, Oy = rotate_point(x1_2d, y1_2d, R, orientation, angle)
             vis_grasp(img_path, dx, dy, x1_2d, y1_2d, x2_2d, y2_2d, Ox, Oy, R, orientation, angle, save_path)
 
-    def augment_single_image(self, image_path,mask_path,data):
+    def augment_single_image(self, image_path,mask_path,data,output_dir):
         """
         Augments a single image and its annotations.
 
@@ -105,26 +123,28 @@ class DataAugmentator:
 
                 # # Save resized image and JSON
                 # new_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}_resized.png"
-                # resized_image.save(os.path.join(self.output_dir, new_filename))
+                # new_filepath = os.path.join(output_dir, new_filename)
+                # resized_image.save(new_filepath)
                 # new_json_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}_resized.json"
-                # with open(os.path.join(self.output_dir, new_json_filename), 'w') as f:
+                # with open(os.path.join(output_dir, new_json_filename), 'w') as f:
                 #     json.dump(resized_data, f, indent=4)
-                # self.visualization(resized_data,new_filename)
+                # self.visualization(resized_data,new_filepath,new_filepath.replace('.png', '_vis.png'))
 
                 # 2. Translate image and annotations
                 translated_data = self.adjust_annotations(resized_data.copy(), tx, ty, 1)
                 translated_image = Image.new("RGB", (new_width, new_height))
                 translated_mask = Image.new("RGB", (new_width, new_height))
                 translated_image.paste(resized_image, (tx, ty))
-                translated_mask.paste(translated_mask, (tx, ty))
+                translated_mask.paste(resized_mask, (tx, ty))
 
                 # # Save translated image and JSON
                 # new_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}_translated.png"
-                # translated_image.save(os.path.join(self.output_dir, new_filename))
+                # new_filepath = os.path.join(output_dir, new_filename)
+                # translated_image.save(new_filepath)
                 # new_json_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}_translated.json"
-                # with open(os.path.join(self.output_dir, new_json_filename), 'w') as f:
+                # with open(os.path.join(output_dir, new_json_filename), 'w') as f:
                 #     json.dump(translated_data, f, indent=4)
-                # self.visualization(translated_data,new_filename)
+                # self.visualization(translated_data,new_filepath,new_filepath.replace('.png', '_vis.png'))
 
                 # 3. Calculate crop coordinates
                 crop_x_min = translated_data['Cx'] - self.crop_width // 2
@@ -156,19 +176,21 @@ class DataAugmentator:
 
                 # Save cropped image(original)
                 new_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}.png"
-                cropped_image.save(os.path.join(self.output_dir, new_filename))
+                new_filepath = os.path.join(output_dir, new_filename)
+                cropped_image.save(new_filepath)
 
                 # Save cropped image(mask)
                 new_mask_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}_mask.png"
-                cropped_mask.save(os.path.join(self.output_dir, new_mask_filename))
+                cropped_mask.save(os.path.join(output_dir, new_mask_filename))
 
                 # Save JSON
                 new_json_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}.json"
-                with open(os.path.join(self.output_dir, new_json_filename), 'w') as f:
+                with open(os.path.join(output_dir, new_json_filename), 'w') as f:
                     json.dump(cropped_data, f, indent=4)
                 
                 # Save vis image
-                self.visualization(cropped_data,new_filename)
+                self.visualization(cropped_data,new_filepath,new_filepath.replace('.png', '_vis.png'))
+
 
     def adjust_annotations(self, data, tx, ty, ratio):
         """
@@ -223,7 +245,9 @@ class DataAugmentator:
         return data
 
 if __name__ == "__main__":
-    input_dir = r'E:\realman-robot\open_door\data\lever_handle'
-    output_dir = r'E:\realman-robot\open_door\data\lever_handle_aug'
-    augmentator = DataAugmentator(input_dir, output_dir)
+    root_dir = '/media/datadisk10tb/leo/projects/realman-robot/open_door/data/lever_handle'
+    input_dir = f'{root_dir}/original/'
+    output_train_dir = f'{root_dir}/train2/'
+    output_test_dir = f'{root_dir}/test2/'
+    augmentator = HandleDataAugmentator(input_dir, output_train_dir, output_test_dir)
     augmentator.augment_data()
