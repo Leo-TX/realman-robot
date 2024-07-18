@@ -193,10 +193,10 @@ def getch(if_p=False):
     return char
 
 if __name__ == "__main__":
-    root_dir = r'E:\realman-robot\open_door\data\images2'
-    rename_files_sequentially(folder=root_dir,digits=3)
+    root_dir = r'E:\realman-robot\open_door\data\lever_handle_2'
+    # rename_files_sequentially(folder=root_dir,digits=3)
     
-    new_root_dir = r'E:\realman-robot\open_door\data\images3_png'
+    new_root_dir = r'E:\realman-robot\open_door\data\lever_handle_2'
     if not os.path.exists(new_root_dir):
         os.makedirs(new_root_dir)
 

@@ -1,4 +1,3 @@
-## TODO end
 '''
 Author: TX-Leo
 Mail: tx.leo.wz@gmail.com
@@ -16,7 +15,7 @@ from utils.lib_io import *
 def to_markdown(text):
   text = text.replace('•', '  *')
   return Markdown(textwrap.indent(text, '> ', predicate=lambda _: True)).data
-
+  
 class GEMINI(object):
     def __init__(self,google_api_key,model_name):
         self.google_api_key = google_api_key
@@ -38,24 +37,35 @@ class GEMINI(object):
             if 'generateContent' in m.supported_generation_methods:
                 print(m.name)
 
-    def text_to_text(self, prompt="What is the meaning of life?"):
+    def text_to_text(self, prompt="What is the meaning of life?",if_p=False):
         response = self.model.generate_content(prompt)
-        print(response.text)
-        print(response.prompt_feedback)
-        print(response.candidates)
-        print(to_markdown(response.text))
-        return response
+        if if_p:
+            print(response.text)
+            # print(response.prompt_feedback)
+            # print(response.candidates)
+            # print(to_markdown(response.text))
+        return response.text
     
-    def text_img_to_text(self, prompt="What is the meaning of life?", img=None):
-        pass
+    def img_to_text(self, img_path,if_p=False):
+        img = Image.open(img_path)
+        response = model.generate_content(img)
+        if if_p:
+            print(response.text)
+        return response.text
+
+    def text_img_to_text(self, prompt="What is the meaning of life?", img_path=None,if_p=False):
+        response = model.generate_content([question, img], stream=True)
+        response.resolve()
+        if if_p:
+            print(response.text)
+        return response.text
     
-    # ## input: text; output in chunks
+# ## input: text; output in chunks
 # response = model.generate_content("What is the meaning of life?", stream=True)
 # for chunk in response:
 #   print(chunk.text)
 #   print("_"*80)
 
-img_path = './data/train_data/3.png'
 question = """
 There are some different types of handles and door. The task is to open the door with the handle, which including two steps.
 The first step is to generate the primitives sequence. The primitives sequence is a list of primitives, which can be used to open the door, including: [0:None,1:Grasp,2:Unlock,3:Rotate,4:Open].
@@ -87,37 +97,11 @@ Example4:
 "parameters": [(0.1,-0.2,0.3),(1.2)] 
 """
 
-
-genai.configure(api_key=GOOGLE_API_KEY)
-    
-for m in genai.list_models():
-  if 'generateContent' in m.supported_generation_methods:
-    print(m.name)
-     
-model = genai.GenerativeModel('gemini-1.5-flash')
-
-# ## input: text
-# response = model.generate_content("What is the meaning of life?")
-# print(response.text)
-# print(response.prompt_feedback)
-# print(response.candidates)
-# print(to_markdown(response.text))
-
 # ## input: text; output in chunks
 # response = model.generate_content("What is the meaning of life?", stream=True)
 # for chunk in response:
 #   print(chunk.text)
 #   print("_"*80)
-
-# ## input: image
-img = Image.open(img_path)
-# response = model.generate_content(img)
-# print(to_markdown(response.text))
-
-## input: image and text
-response = model.generate_content([question, img], stream=True)
-response.resolve()
-print(to_markdown(response.text))
 
 # ## chat conversations
 # chat = model.start_chat(history=[])
@@ -136,3 +120,7 @@ print(to_markdown(response.text))
 # ## count tokens
 # model.count_tokens("What is the meaning of life?")
 # model.count_tokens(chat.history)
+
+if __name__ == "__main__":
+    gemini = GEMINI.init_from_yaml('cfg/cfg_gemini.yaml')
+    response = gemini.text_to_text(prompt="What is the meaning of life?",if_p=True)

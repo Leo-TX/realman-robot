@@ -26,6 +26,7 @@ from dtsam import DTSAM
 from server import Server
 from ransac import RANSAC
 from dmp import DMP
+from gemini import GEMINI
 from _primitive import _Primitive
 
 from utils.lib_math import *
@@ -70,6 +71,9 @@ class Primitive(object):
         
         ## init dtsam
         self.dtsam = DTSAM.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_dtsam}')
+
+        ## init gemini
+        self.gemini = GEMINI.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_gemini}')
 
         ## remote
         self.remote_python_path = cfg.remote_python_path
@@ -901,15 +905,27 @@ class Primitive(object):
         ret, error = self.do_primitive('open')
     
     def hl_LLM(self):
-        pass
+        prompt = """"""
+        img_path = ''
+        response = self.gemini.text_to_text(prompt)
+        next_id = int(response)
 
-    def hl_MLLM(self):
-        pass
+    def hl_VLM(self):
+        prompt = """"""
+        img_path = ''
+        response = self.gemini.text_img_to_text(prompt,img)
+        next_id = int(response)
 
     def hl_MLP(self):
         pass
 
     def hl_SM(self):
+        pass
+
+    def ll_YOLO(self):
+        pass
+
+    def ll_VLM(self):
         pass
         
     def close_loop_state_machine(self):

@@ -1,2 +1,2 @@
-GOOGLE_API_KEY: 111
+google_api_key: "AIzaSyDZUZgCsSFDBClqrHSutRFj4oKArDgwYFg"
 model_name: 'gemini-1.5-pro'

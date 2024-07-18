@@ -75,9 +75,6 @@ class DTSAM():
 
         f_name = os.path.basename(local_img_path).split('.')[0]
 
-        # transfer the output dir to the server
-        # server.transfer_folder_remote2local(f'{remote_img_dir}/dtsam/', f'{os.path.dirname(local_img_path)}/{f_name}_dtsam/')
-
         server.transfer_file_remote2local(f'{remote_img_dir}/dtsam/dtsam_result.json',f'{os.path.dirname(local_img_path)}/{f_name}.json',if_p=False)
         server.transfer_file_remote2local(f'{remote_img_dir}/dtsam/center.png',f'{os.path.dirname(local_img_path)}/{f_name}_mask.png',if_p=False)
 
