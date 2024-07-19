@@ -1,1 +1,1 @@
-model_load_path: 'checkpoints/hgum2.pth'
+model_load_path: 'checkpoints/hgum.pth'

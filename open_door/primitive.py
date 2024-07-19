@@ -28,7 +28,7 @@ from ransac import RANSAC
 from dmp import DMP
 from gemini import GEMINI
 from _primitive import _Primitive
-from hgum import HandleGraspUnlockModel as HGUM
+# from hgum import HandleGraspUnlockModel as HGUM
 
 from utils.lib_math import *
 from utils.lib_io import *
@@ -77,7 +77,7 @@ class Primitive(object):
         self.gemini = GEMINI.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_gemini}')
 
         ## init handle_grasp_model
-        self.hgum = HGUM.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_hgum}')
+        # self.hgum = HGUM.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_hgum}')
 
         ## remote
         self.remote_python_path = cfg.remote_python_path
@@ -88,7 +88,7 @@ class Primitive(object):
         self.tjt_num = tjt_num
         self.action_num = 0
         self.root_dir = root_dir
-        self.tjt_dir = f'{self.root_dir}/data/trajectory_{self.tjt_num:03d}/'
+        self.tjt_dir = f'{self.root_dir}/data/test/trajectory_{self.tjt_num:03d}/'
         if os.path.exists(self.tjt_dir):
              shutil.rmtree(self.tjt_dir)
         os.makedirs(self.tjt_dir)
@@ -261,7 +261,7 @@ class Primitive(object):
                 self.this_pmt.error = 'SAFETY_ISSUE'
                 print(f'[Now Current]: {current}')
                 self.arm.move_stop(if_p=True)
-                move_stop
+                self.base.move_stop(if_p=True)
                 break
             elif current_check_result == 0:
                 print(f"!!! Event Detected !!!")

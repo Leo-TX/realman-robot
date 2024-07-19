@@ -8,7 +8,6 @@ Brief:
 '''
 import os
 import json
-
 class RANSAC():
     def __init__(self,cfg_ransac='cfg/cfg_ransac.yaml',cfg_cam='cfg/cfg_cam.yaml',vis=False):
         self.config_file_path=cfg_ransac

@@ -105,10 +105,10 @@ class Arm():
         tag = self.arm.Write_Single_Register(port=GRIPPER_PORT, address=ADDRESS_SET_POS, data=start_pos, device=GRIPPER_DEVICE, block=True)
         tag = self.arm.Write_Single_Register(port=GRIPPER_PORT, address=ADDRESS_SET_VEL, data=vel, device=GRIPPER_DEVICE, block=True)
         tag, value = self.arm.Get_Read_Input_Registers(port=GRIPPER_PORT, address=ADDRESS_GET_GRIPPER_INIT_RETURN, device=GRIPPER_DEVICE)
-        if value != 1: # 0: not init. 1: init is successful. 2: initializing
-            print(f'[Arm Info] Init Failed: {value}!!!!!!! Re-init Gripper...')
-            time.sleep(0.2)
-            self.connect_gripper()
+        # if value != 1: # 0: not init. 1: init is successful. 2: initializing
+        #     print(f'[Arm Info] Init Failed: {value}!!!!!!! Re-init Gripper...')
+        #     time.sleep(0.5)
+        #     self.connect_gripper()
         print('Gripper Connected\n==========')
         return tag
 

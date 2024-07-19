@@ -269,7 +269,7 @@ class Base(object):
 if __name__ == "__main__":
     ## init
     # base = Base.init_from_yaml(cfg_path='cfg/cfg_base.yaml')
-    base = Base(linear_velocity=0.5,angular_velocity=1.0)
+    base = Base(linear_velocity=0.3,angular_velocity=0.6)
     print(base)
 
     ## move keyboard

@@ -21,7 +21,7 @@ remote_img_dir: '/media/datadisk10tb/leo/projects/realman-robot/open_door/trajec
 
 ## primitive
 premove:
-  offset_in_front: 0.50 # m
+  offset_in_front: 0.60 # m 0.5
   d2t_coefficient: 4.8
 grasp:
   gripper_value: 50
@@ -37,7 +37,7 @@ rotate:
 open:
   gripper_value_pull: 50
   gripper_value_push: 50
-  T: 5 # s
+  T: 4 # s
   linear_velocity: 0.8 # 0.8, >0
   angular_velocity: 0 # 0.6 >0
 home:
@@ -57,7 +57,7 @@ threshold:
   unlock:
     l: -18000
     h: 18000
-    stop_l_left: -3000 # mainly for joint[2]## TODO for vertical one
+    stop_l_left: -3500 # mainly for joint[2] ## TODO for vertical one 3000?
     stop_h_left: 15000
     stop_l_right: -3000 
     stop_h_right: 15000
@@ -71,8 +71,8 @@ threshold:
   open:
     l: -25000
     h: 25000
-    pull_j3_l_right: -4500
-    pull_j3_l_left: -1000
+    pull_j3_l_right: -5500 ## todo -4500
+    pull_j3_l_left: -1500 ## todo 1000
 
     push_j3_h_right: 15000
     push_j3_h_left: 4000
