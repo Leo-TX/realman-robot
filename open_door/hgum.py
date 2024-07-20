@@ -12,9 +12,9 @@ class HGUM(object):
     #     cfg = read_yaml_file(cfg_path, is_convert_dict_to_class=True)
     #     return cls()
 
-    def get_dxdyR(self,image_path='',mask_path=''):
+    def get_dxdyR(self,image_path='',mask_path='',root_dir=''):
         from hgum_package.get_dxdyR import get_dxdyR
-        dx,dy,R = get_dxdyR(image_path,mask_path)
+        dx,dy,R = get_dxdyR(image_path,mask_path,root_dir=root_dir)
         return dx,dy,R
     
     def get_dxdyR_server(self,image_path,mask_path,server,remote_python_path,remote_root_dir,remote_img_dir):
@@ -50,4 +50,4 @@ if __name__ == "__main__":
     hgum = HGUM()
     image_path = r'/media/datadisk10tb/leo/projects/realman-robot/open_door/data/test/trajectory_000/1.png'
     mask_path = r'/media/datadisk10tb/leo/projects/realman-robot/open_door/data/test/trajectory_000/1/dtsam/center.png'
-    dx, dy, R = hgum.get_dxdyR(image_path,mask_path)
+    dx, dy, R = hgum.get_dxdyR(image_path,mask_path,root_dir='./hgum_package/')

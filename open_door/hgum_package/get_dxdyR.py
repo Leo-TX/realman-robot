@@ -21,10 +21,11 @@ from handle_grasp_unlock_model import HandleGraspUnlockModel
 DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 RESNET_DEPTH = 18
 
-def get_dxdyR(image_path='',mask_path='',model_path='./checkpoints/hgum.pth',root_dir=root_dir,if_p=False):
+def get_dxdyR(image_path='',mask_path='',model_path='checkpoints/hgum.pth',root_dir='./',if_p=False):
     ## model
     model = HandleGraspUnlockModel(resnet_depth=RESNET_DEPTH, pretrained=True).to(DEVICE)
-    model.load_state_dict(torch.load(f'{root_dir}/{model_path}'))
+    model_path = f'{root_dir}/{model_path}'
+    model.load_state_dict(torch.load(model_path))
     model.eval()
 
     ## image dir

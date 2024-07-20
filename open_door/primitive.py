@@ -28,7 +28,7 @@ from ransac import RANSAC
 from dmp import DMP
 from gemini import GEMINI
 from _primitive import _Primitive
-# from hgum import HandleGraspUnlockModel as HGUM
+from hgum import HGUM
 
 from utils.lib_math import *
 from utils.lib_io import *
@@ -77,7 +77,7 @@ class Primitive(object):
         self.gemini = GEMINI.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_gemini}')
 
         ## init handle_grasp_model
-        # self.hgum = HGUM.init_from_yaml(cfg_path=f'{root_dir}/{cfg.cfg_hgum}')
+        self.hgum = HGUM()
 
         ## remote
         self.remote_python_path = cfg.remote_python_path
@@ -349,7 +349,6 @@ class Primitive(object):
         self.this_pmt.action = "GRASP"
         self.this_pmt.id = self.GRASP
         self.this_pmt.param = grasp_param
-        self.dx,self.dy,self.R = grasp_param
 
         ## os
         rgb_img_path = f'{self.tjt_dir}/{self.action_num}/rgb.png'
@@ -366,6 +365,14 @@ class Primitive(object):
             self.this_pmt.error = "GRASP_NO_HANDLE"
             print(f'[DTSAM Result] NO handle detections!!!')
         else:
+            ## dx,dy,R
+            if not grasp_param:
+                mask_path = f'{os.path.dirname(rgb_img_path)}/dtsam/center.png'
+                self.dx,self.dy,self.R = hgum.get_dxdyR_server(rgb_img_path,mask_path,self.server,self.remote_python_path,self.remote_root_dir,self.remote_img_dir)
+            else:
+                self.dx,self.dy,self.R = grasp_param
+            print(f'[HGUM Result] dx: {dx}, dy: {dy}, R: {R}')
+
             ##　grasp point 2d offset(dx,dy)
             self.x1_2d += self.dx
             self.y1_2d += self.dy
@@ -377,7 +384,8 @@ class Primitive(object):
             print(f'[center] Ox: {self.Ox}, Oy: {self.Oy}')
             
             ## vis
-            vis_grasp(rgb_img_path,self.dx,self.dy,self.x1_2d,self.y1_2d,self.x2_2d,self.y2_2d,self.Ox,self.Oy,self.R,self.orientation,angle=90,save_path=rgb_img_path.replace('rgb','vis_grasp'),show=False)
+            save_path = f'{os.path.dirname(rgb_img_path)}/hgum/hgum.png'
+            vis_grasp(rgb_img_path,self.dx,self.dy,self.x1_2d,self.y1_2d,self.x2_2d,self.y2_2d,self.Ox,self.Oy,self.R,self.orientation,angle=90,save_path=save_path,show=False)
 
             ## determin which arm
             if self.x1_2d < self.camera.width / 2:
@@ -512,6 +520,7 @@ class Primitive(object):
                     self.this_pmt.ret = self.SUCCESS
                     self.this_pmt.error = "NONE"
         
+        self.this_pmt.param = [self.dx,self.dy,self.R]
         self.update()
         print(f'[Primitive INFO] ret: {self.this_pmt.ret}, error: {self.this_pmt.error}')
         print(f'========== Grasp Done ==========')
@@ -858,7 +867,9 @@ class Primitive(object):
         if primitive_type == self.PREMOVE:
             ret,error = self.premove()
         elif primitive_type == self.GRASP:
-            ret,error = self.grasp(grasp_param=_param[:3])
+            if grasp_param:
+                grasp_param = _param[:3]
+            ret,error = self.grasp(grasp_param)
         elif primitive_type == self.ROTATE:
             ret,error = self.rotate()
         elif primitive_type == self.UNLOCK:
