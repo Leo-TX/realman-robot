@@ -1,16 +1,19 @@
+import os
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
+from torch.utils.data import DataLoader
+
 from handle_grasp_unlock_dataset import HandleGraspUnlockDataset
 from handle_grasp_unlock_model import HandleGraspUnlockModel
 
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 BATCH_SIZE = 16
 RESNET_DEPTH = 18
 
 def eval():
-    eval_dataset_dir = r'./data/lever_handle/eval' 
+    eval_dataset_dir = r'/media/datadisk10tb/leo/projects/data/lever_handle/eval'
     model_load_path = r'./checkpoints/hgum.pth'
     eval_vis_path = r'./checkpoints/'
 

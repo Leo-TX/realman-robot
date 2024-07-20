@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from torchvision import models
+from torchvision import transforms
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 RESNET_DEPTH = 18
@@ -39,9 +40,6 @@ class HandleGraspUnlockModel(nn.Module):
             image_features = image_features.unsqueeze(0).flatten(start_dim=1)  # batch_size * 512
         if len(mask_features.shape) == 1:
             mask_features = mask_features.unsqueeze(0).flatten(start_dim=1)  # batch_size * 512
-            
-        # print(f'image_features.shape: {image_features.shape}')
-        # print(f'mask_features.shape: {mask_features.shape}')
 
         features = torch.cat((image_features, mask_features), dim=1)
         output = self.predictor(features)
@@ -77,6 +75,9 @@ class HandleGraspUnlockModel(nn.Module):
         with torch.no_grad():
             output = self.forward(image,mask)
         dx, dy, R = output[0].cpu().numpy()
+        dx = float(dx)
+        dy = float(dy)
+        R = float(R)
 
         if if_p:
             print(f'[HGUM Result] dx: {dx}, dy: {dy}, R: {R}')

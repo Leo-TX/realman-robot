@@ -1,5 +1,5 @@
-import torch
-from hgum_package.handle_grasp_unlock_model import HandleGraspUnlockModel
+import os
+import json
 
 from utils.lib_io import *
 
@@ -47,6 +47,7 @@ class HGUM(object):
         return dx,dy,R
 
 if __name__ == "__main__":
-    hgum = HGUM.init_from_yaml('cfg/cfg_hgum.yaml')
-    image_path = 'your_image_path.jpg'
-    dx, dy, R = hgum.get_dxdyR(image_path,vis=True,if_p=True)
+    hgum = HGUM()
+    image_path = r'/media/datadisk10tb/leo/projects/realman-robot/open_door/data/test/trajectory_000/1.png'
+    mask_path = r'/media/datadisk10tb/leo/projects/realman-robot/open_door/data/test/trajectory_000/1/dtsam/center.png'
+    dx, dy, R = hgum.get_dxdyR(image_path,mask_path)
