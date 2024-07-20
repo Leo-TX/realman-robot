@@ -148,8 +148,46 @@ def vis_d(d_img_path,save_path,show=False):
     if show:
         plt.show()
 
+def crop_image(img_path, center_x, center_y, new_w, new_h, save_path=None):
+    # Open the image
+    image = Image.open(img_path)
+    
+    # Get the width and height of the image
+    img_width, img_height = image.size
+    
+    # Calculate the coordinates of the top left and bottom right corners of the crop area
+    left = center_x - new_w // 2
+    top = center_y - new_h // 2
+    right = left + new_w
+    bottom = top + new_h
+    
+    # Handle special cases: adjust the crop area if it goes beyond the image boundaries
+    if left < 0:
+        left = 0
+        right = new_w
+    elif right > img_width:
+        right = img_width
+        left = img_width - new_w
+    
+    if top < 0:
+        top = 0
+        bottom = new_h
+    elif bottom > img_height:
+        bottom = img_height
+        top = img_height - new_h
+    
+    # Crop the image
+    cropped_image = image.crop((left, top, right, bottom))
+    
+    # save
+    if save_path:
+        cropped_image.save(save_path)
+    
+    # Return the cropped image
+    return cropped_image
+
 if __name__ == "__main__":
-    x1_2d,y1_2d=368.35743484925905,427.1806336228922
+    x1_2d,y1_2d = 368.35743484925905,427.1806336228922
     dx = -8
     dy = 50
     R = -150

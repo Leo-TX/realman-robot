@@ -367,11 +367,15 @@ class Primitive(object):
         else:
             ## dx,dy,R
             if not grasp_param:
+                crop_rgb_img_path = f'{os.path.dirname(rgb_img_path)}/hgum/rgb_cropped.png'
+                crop_image(rgb_img_path, center_x=self.x1_2d, center_y=self.y1_2d, new_w=640, new_h=480, save_path=crop_rgb_img_path)
                 mask_path = f'{os.path.dirname(rgb_img_path)}/dtsam/center.png'
-                self.dx,self.dy,self.R = hgum.get_dxdyR_server(rgb_img_path,mask_path,self.server,self.remote_python_path,self.remote_root_dir,self.remote_img_dir)
+                crop_mask_path = f'{os.path.dirname(rgb_img_path)}/hgum/mask_cropped.png'
+                mask_image = crop_image(mask_path, center_x=self.x1_2d, center_y=self.y1_2d, new_w=640, new_h=480, save_path=crop_mask_path)
+                self.dx,self.dy,self.R = self.hgum.get_dxdyR_server(crop_rgb_img_path,crop_mask_path,self.server,self.remote_python_path,self.remote_root_dir,self.remote_img_dir)
             else:
                 self.dx,self.dy,self.R = grasp_param
-            print(f'[HGUM Result] dx: {dx}, dy: {dy}, R: {R}')
+            print(f'[HGUM Result] dx: {self.dx}, dy: {self.dy}, R: {self.R}')
 
             ##　grasp point 2d offset(dx,dy)
             self.x1_2d += self.dx
@@ -867,8 +871,10 @@ class Primitive(object):
         if primitive_type == self.PREMOVE:
             ret,error = self.premove()
         elif primitive_type == self.GRASP:
-            if grasp_param:
+            if _param:
                 grasp_param = _param[:3]
+            else:
+                grasp_param = None
             ret,error = self.grasp(grasp_param)
         elif primitive_type == self.ROTATE:
             ret,error = self.rotate()

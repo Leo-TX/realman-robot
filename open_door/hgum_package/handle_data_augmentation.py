@@ -110,89 +110,113 @@ class HandleDataAugmentator:
 
         for i in range(self.translation_num):
             for j in range(self.resize_num):
-                # Random translation
-                tx = random.randint(self.translation_x_min, self.translation_x_max)
-                ty = random.randint(self.translation_y_min, self.translation_y_max)
+                for k in range(2):
+                    # 1. Flip image and annotations
+                    if k == 0:
+                        flip_mode = None
+                    else:
+                        if data['orientation'] == 'orizontal':
+                            flip_mode = Image.FLIP_LEFT_RIGHT
+                        elif data['orientation'] == 'vertical':
+                            flip_mode = Image.FLIP_TOP_BOTTOM
+                    flipped_image = image.transpose(flip_mode)
+                    flipped_mask = mask.transpose(flip_mode)
+                    flipped_data = self.adjust_annotations_for_flipping(data.copy(),original_width,original_height)
+                    
+                    # # Save flipped image and JSON
+                    # new_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}_{k}_flipped.png"
+                    # new_filepath = os.path.join(output_dir, new_filename)
+                    # flipped_image.save(new_filepath)
+                    # new_json_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}_{k}_flipped.json"
+                    # with open(os.path.join(output_dir, new_json_filename), 'w') as f:
+                    #     json.dump(flipped_data, f, indent=4)
+                    # self.visualization(flipped_data,new_filepath,new_filepath.replace('.png', '_vis.png'))
+                    
+                    # 2. Resize image and annotations
+                    
+                    # Random resize
+                    ratio = random.uniform(self.ratio_min, self.ratio_max)
 
-                # Random resize
-                ratio = random.uniform(self.ratio_min, self.ratio_max)
-                
-                # 1. Resize image and annotations
-                new_width = int(original_width * ratio)
-                new_height = int(original_height * ratio)
-                resized_image = image.resize((new_width, new_height))
-                resized_mask = mask.resize((new_width, new_height))
-                resized_data = self.adjust_annotations(data.copy(), 0, 0, ratio)
+                    new_width = int(original_width * ratio)
+                    new_height = int(original_height * ratio)
+                    resized_image = flipped_image.resize((new_width, new_height))
+                    resized_mask = flipped_mask.resize((new_width, new_height))
+                    resized_data = self.adjust_annotations(flipped_data.copy(), 0, 0, ratio)
 
-                # # Save resized image and JSON
-                # new_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}_resized.png"
-                # new_filepath = os.path.join(output_dir, new_filename)
-                # resized_image.save(new_filepath)
-                # new_json_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}_resized.json"
-                # with open(os.path.join(output_dir, new_json_filename), 'w') as f:
-                #     json.dump(resized_data, f, indent=4)
-                # self.visualization(resized_data,new_filepath,new_filepath.replace('.png', '_vis.png'))
+                    # # Save resized image and JSON
+                    # new_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}_{k}_resized.png"
+                    # new_filepath = os.path.join(output_dir, new_filename)
+                    # resized_image.save(new_filepath)
+                    # new_json_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}_{k}_resized.json"
+                    # with open(os.path.join(output_dir, new_json_filename), 'w') as f:
+                    #     json.dump(resized_data, f, indent=4)
+                    # self.visualization(resized_data,new_filepath,new_filepath.replace('.png', '_vis.png'))
 
-                # 2. Translate image and annotations
-                translated_data = self.adjust_annotations(resized_data.copy(), tx, ty, 1)
-                translated_image = Image.new("RGB", (new_width, new_height))
-                translated_mask = Image.new("RGB", (new_width, new_height))
-                translated_image.paste(resized_image, (tx, ty))
-                translated_mask.paste(resized_mask, (tx, ty))
+                    # 3. Translate image and annotations
 
-                # # Save translated image and JSON
-                # new_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}_translated.png"
-                # new_filepath = os.path.join(output_dir, new_filename)
-                # translated_image.save(new_filepath)
-                # new_json_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}_translated.json"
-                # with open(os.path.join(output_dir, new_json_filename), 'w') as f:
-                #     json.dump(translated_data, f, indent=4)
-                # self.visualization(translated_data,new_filepath,new_filepath.replace('.png', '_vis.png'))
+                    # Random translation
+                    tx = random.randint(self.translation_x_min, self.translation_x_max)
+                    ty = random.randint(self.translation_y_min, self.translation_y_max)
 
-                # 3. Calculate crop coordinates
-                crop_x_min = translated_data['Cx'] - self.crop_width // 2
-                crop_y_min = translated_data['Cy'] - self.crop_height // 2
-                crop_x_max = crop_x_min + self.crop_width
-                crop_y_max = crop_y_min + self.crop_height
+                    translated_data = self.adjust_annotations(resized_data.copy(), tx, ty, 1)
+                    translated_image = Image.new("RGB", (new_width, new_height))
+                    translated_mask = Image.new("RGB", (new_width, new_height))
+                    translated_image.paste(resized_image, (tx, ty))
+                    translated_mask.paste(resized_mask, (tx, ty))
 
-                # Adjust crop coordinates to stay within image boundaries
-                if crop_x_min < 0:
-                    crop_x_min = 0
-                    crop_x_max = self.crop_width
-                elif crop_x_max > new_width:
-                    crop_x_max = new_width
-                    crop_x_min = new_width - self.crop_width
+                    # # Save translated image and JSON
+                    # new_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}_{k}_translated.png"
+                    # new_filepath = os.path.join(output_dir, new_filename)
+                    # translated_image.save(new_filepath)
+                    # new_json_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}_{k}_translated.json"
+                    # with open(os.path.join(output_dir, new_json_filename), 'w') as f:
+                    #     json.dump(translated_data, f, indent=4)
+                    # self.visualization(translated_data,new_filepath,new_filepath.replace('.png', '_vis.png'))
 
-                if crop_y_min < 0:
-                    crop_y_min = 0
-                    crop_y_max = self.crop_height
-                elif crop_y_max > new_height:
-                    crop_y_max = new_height
-                    crop_y_min = new_height - self.crop_height
+                    # 4. Crop image and annotations
+                    crop_x_min = translated_data['Cx'] - self.crop_width // 2
+                    crop_y_min = translated_data['Cy'] - self.crop_height // 2
+                    crop_x_max = crop_x_min + self.crop_width
+                    crop_y_max = crop_y_min + self.crop_height
 
-                # Crop image
-                cropped_image = translated_image.crop((crop_x_min, crop_y_min, crop_x_max, crop_y_max))
-                cropped_mask = translated_mask.crop((crop_x_min, crop_y_min, crop_x_max, crop_y_max))
+                    # Adjust crop coordinates to stay within image boundaries
+                    if crop_x_min < 0:
+                        crop_x_min = 0
+                        crop_x_max = self.crop_width
+                    elif crop_x_max > new_width:
+                        crop_x_max = new_width
+                        crop_x_min = new_width - self.crop_width
 
-                # 4. Adjust annotations for cropping
-                cropped_data = self.adjust_annotations_for_cropping(translated_data.copy(), crop_x_min, crop_y_min)
+                    if crop_y_min < 0:
+                        crop_y_min = 0
+                        crop_y_max = self.crop_height
+                    elif crop_y_max > new_height:
+                        crop_y_max = new_height
+                        crop_y_min = new_height - self.crop_height
 
-                # Save cropped image(original)
-                new_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}.png"
-                new_filepath = os.path.join(output_dir, new_filename)
-                cropped_image.save(new_filepath)
+                    # Crop image
+                    cropped_image = translated_image.crop((crop_x_min, crop_y_min, crop_x_max, crop_y_max))
+                    cropped_mask = translated_mask.crop((crop_x_min, crop_y_min, crop_x_max, crop_y_max))
 
-                # Save cropped image(mask)
-                new_mask_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}_mask.png"
-                cropped_mask.save(os.path.join(output_dir, new_mask_filename))
+                    # Adjust annotations for cropping
+                    cropped_data = self.adjust_annotations_for_cropping(translated_data.copy(), crop_x_min, crop_y_min)
 
-                # Save JSON
-                new_json_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}.json"
-                with open(os.path.join(output_dir, new_json_filename), 'w') as f:
-                    json.dump(cropped_data, f, indent=4)
-                
-                # Save vis image
-                self.visualization(cropped_data,new_filepath,new_filepath.replace('.png', '_vis.png'))
+                    # Save cropped image(original)
+                    new_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}_{k}.png"
+                    new_filepath = os.path.join(output_dir, new_filename)
+                    cropped_image.save(new_filepath)
+
+                    # Save cropped image(mask)
+                    new_mask_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}_{k}_mask.png"
+                    cropped_mask.save(os.path.join(output_dir, new_mask_filename))
+
+                    # Save JSON
+                    new_json_filename = os.path.splitext(os.path.basename(image_path))[0] + f"_{i}_{j}_{k}.json"
+                    with open(os.path.join(output_dir, new_json_filename), 'w') as f:
+                        json.dump(cropped_data, f, indent=4)
+                    
+                    # Save vis image
+                    self.visualization(cropped_data,new_filepath,new_filepath.replace('.png', '_vis.png'))
 
 
     def adjust_annotations(self, data, tx, ty, ratio):
@@ -225,6 +249,33 @@ class HandleDataAugmentator:
 
         return data
     
+    def adjust_annotations_for_flipping(self,data,img_w,img_h):
+        if data['orientation'] == 'horizontal':
+            data['box'][0] = img_w - data['box'][0]
+            data['box'][1] = data['box'][1]
+            data['box'][2] = img_w - data['box'][2]
+            data['box'][3] = data['box'][3]
+            data['Cx'] = img_w - data['Cx']
+            data['Cy'] = data['Cy']
+            data['dx'] = -data['dx']
+            data['dy'] = data['dy']
+            data['R'] = -data['R']
+
+        elif data['orientation'] == 'vertical':
+            data['box'][0] = data['box'][0]
+            data['box'][1] = img_h - data['box'][1]
+            data['box'][2] = data['box'][2]
+            data['box'][3] = img_h - data['box'][3]
+            data['Cx'] = data['Cx']
+            data['Cy'] = img_h - data['Cy']
+            data['dx'] = data['dx']
+            data['dy'] = -data['dy']
+            data['R'] = -data['R']
+    
+        # w,h stay the same
+        
+    return data
+
     def adjust_annotations_for_cropping(self, data, crop_x_min, crop_y_min):
         """
         Adjusts the annotations for cropping.
@@ -244,6 +295,8 @@ class HandleDataAugmentator:
 
         data['Cx'] -= crop_x_min
         data['Cy'] -= crop_y_min
+        
+        # w,h,dx,dy,R stay the same
         
         return data
 

@@ -9,7 +9,6 @@ Brief:
 
 import serial
 from utils.lib_io import *
-
 class Head(object):
     def __init__(self,port='COM3',baudrate=9600,servo_1_position=400,servo_2_position=500):
         self.port = port
