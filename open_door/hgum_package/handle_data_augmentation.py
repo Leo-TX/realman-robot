@@ -5,6 +5,9 @@ from PIL import Image
 import random
 import numpy as np
 
+import sys
+root_dir = "../"
+sys.path.append(root_dir)
 from utils.lib_rgbd import *
 
 class HandleDataAugmentator:

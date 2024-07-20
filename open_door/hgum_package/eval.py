@@ -10,9 +10,9 @@ BATCH_SIZE = 16
 RESNET_DEPTH = 18
 
 def eval():
-    eval_dataset_dir = r'../data/lever_handle/eval' 
-    model_load_path = r'../checkpoints/hgum.pth'
-    eval_vis_path = r'../checkpoints/'
+    eval_dataset_dir = r'./data/lever_handle/eval' 
+    model_load_path = r'./checkpoints/hgum.pth'
+    eval_vis_path = r'./checkpoints/'
 
     ## dataset and dataloader
     eval_dataset = HandleGraspUnlockDataset(root_dir=eval_dataset_dir)

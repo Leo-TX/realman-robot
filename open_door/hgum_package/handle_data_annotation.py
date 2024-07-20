@@ -6,6 +6,9 @@ from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageTk, ImageDraw
 import numpy as np
 
+import sys
+root_dir = "../"
+sys.path.append(root_dir)
 from utils.lib_rgbd import *
 
 class HandleDataAnnotator:

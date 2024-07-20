@@ -6,48 +6,53 @@ Version: v1
 File: 
 Brief: 
 '''
+import os
 import json
+import argparse
 from PIL import Image
 import torch
 from torchvision import transforms
-from handle_grasp_unlock_model import HandleGraspUnlockModel
 
-import sys
-root_dir = "../"
-sys.path.append(root_dir)
-from utils.lib_rgbd import *
+from handle_grasp_unlock_model import HandleGraspUnlockModel
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 RESNET_DEPTH = 18
 
-def get_dxdyR(root_dir='./',model=None,image_path='',vis=False,if_p=False):
+def get_dxdyR(image_path='',mask_path='',model_path='./checkpoints/hgum.pth',if_p=False):
     ## model
-    if not model:
-        model_load_path = f'{root_dir}/checkpoints/hgum.pth'
-        model = HandleGraspUnlockModel(resnet_depth=RESNET_DEPTH, pretrained=True).to(DEVICE)
-        model.load_state_dict(torch.load(model_load_path))
+    model = HandleGraspUnlockModel(resnet_depth=RESNET_DEPTH, pretrained=True).to(DEVICE)
+    model.load_state_dict(torch.load(model_path))
     model.eval()
 
-    mask_path = image_path.replace('.png', '_mask.png')
+    ## image dir
+    image_dir = os.path.dirname(image_path)+'/hgum'
+    if not os.path.exists(image_dir):
+        os.makedirs(image_dir)
+
+    ## mask path
+    if not mask_path:
+        mask_path = image_path.replace('.png', '_mask.png')
 
     ## forward
     dx,dy,R = model.hgum_api(image_path,mask_path,if_p=if_p)
 
-    if vis:
-    ## vis_grasp
-        with open(image_path.replace('.png','.json'), 'r') as f:
-            data = json.load(f)
-        Cx = data['Cx']
-        Cy = data['Cy']
-        orientation = data['orientation']
-        x1_2d, y1_2d = Cx+dx, Cy+dy
-        angle = 90
-        x2_2d, y2_2d, Ox, Oy = rotate_point(x1_2d, y1_2d, R, orientation, angle)
-        vis_grasp(image_path, dx, dy, x1_2d, y1_2d, x2_2d, y2_2d, Ox, Oy, R, orientation, angle, save_path=image_path.replace('.png','_vis_predicted.png'))
-        
+    ## save to hgum/hgum_result.json
+    result_save_path = image_dir+'/hgum_result.json'
+    result = {"dx":dx,
+              "dy":dy,
+              "R":R,
+    }
+    with open(result_save_path, 'w') as file:
+        json.dump(result, file, indent=4)
+    
     return dx,dy,R
 
+def main(args):
+    get_dxdyR(args.image_path,args.mask_path,args.model_path)
+
 if __name__ == '__main__':
-    root_dir = '../'
-    image_path = '/media/datadisk10tb/leo/projects/realman-robot/images/lever.png'
-    dx,dy,R = get_dxdyR(image_path,vis=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-i", "--image_path", type=str, default="", help="Input image path.")
+    parser.add_argument("-m", "--mask_path", type=str, default="", help="Input mask path.")
+    parser.add_argument("-model", "--model_path", type=str, default="./checkpoints/hgum.pth", help="Input model path.")
+    main(parser.parse_args())

@@ -22,9 +22,9 @@ LR = 1e-4
 N_EPOCHS = 30
 
 def train():
-    train_dataset_dir = r'../data/lever_handle/train'
-    model_load_path = r'../checkpoints/hgum.pth'
-    loss_save_path = r'../checkpoints/loss.png'
+    train_dataset_dir = r'./data/lever_handle/train'
+    model_load_path = r'./checkpoints/hgum.pth'
+    loss_save_path = r'./checkpoints/loss.png'
 
     ## dataset and dataloader
     train_dataset = HandleGraspUnlockDataset(root_dir=train_dataset_dir)

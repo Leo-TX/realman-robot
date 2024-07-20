@@ -15,7 +15,7 @@ RESNET_DEPTH = 18
 
 def test():
     ## model
-    model_load_path = r'../checkpoints/hgum.pth'
+    model_load_path = r'./checkpoints/hgum.pth'
     model = HandleGraspUnlockModel(resnet_depth=RESNET_DEPTH, pretrained=True).to(DEVICE)
     model.load_state_dict(torch.load(model_load_path))
     model.eval()

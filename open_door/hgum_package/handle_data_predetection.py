@@ -6,10 +6,14 @@ Version: v1
 File: 
 Brief: 
 '''
+import os
+
+import sys
+root_dir = "../"
+sys.path.append(root_dir)
+from utils.lib_io import *
 from server import Server 
 from dtsam import DTSAM
-from utils.lib_io import *
-import os
 
 root_dir = r'E:\realman-robot\open_door\data\lever_handle_2'
 
@@ -17,8 +21,8 @@ root_dir = r'E:\realman-robot\open_door\data\lever_handle_2'
 names = get_filenames(folder=root_dir,is_base_name=False,filter='png')
 
 ## init
-server = Server.init_from_yaml(cfg_path=f'cfg/cfg_server.yaml')
-dtsam = DTSAM.init_from_yaml(cfg_path=f'cfg/cfg_dtsam.yaml')
+server = Server.init_from_yaml(cfg_path=f'{root_dir}/cfg/cfg_server.yaml')
+dtsam = DTSAM.init_from_yaml(cfg_path=f'{root_dir}/cfg/cfg_dtsam.yaml')
 
 ## remote
 remote_python_path = '/media/datadisk10tb/leo/anaconda3/envs/rm/bin/python'
